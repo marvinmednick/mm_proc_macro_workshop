@@ -50,6 +50,8 @@ pub struct Command {
     args: Vec<String>,
     env: Vec<String>,
     current_dir: String,
+
+    eprintln!("executable {}",executable);
 }
 
 fn main() {
