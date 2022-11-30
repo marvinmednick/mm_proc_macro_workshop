@@ -24,6 +24,15 @@ pub fn derive(input: TokenStream) -> TokenStream {
 //    eprintln!("Input is {:#?}",input2);
 //    eprintln!("........");
     //eprintln!("Parsed Input is {:#?}",input1);
-    let output : proc_macro::TokenStream = quote!( impl Command { pub fn builder() {} }; ).into();
+    let output : proc_macro::TokenStream = quote!( 
+        impl Command { 
+            pub fn builder() { }
+            pub fn test1() { }
+        } 
+        struct newOne {
+            field1 : usize,
+            fieedl2 : usize,
+        }
+        ).into();
     return output
 }
