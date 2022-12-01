@@ -1,29 +1,40 @@
 use proc_macro::{TokenStream};
 use quote::quote;
-use syn::{parse_macro_input,DeriveInput};
+use syn::{parse,parse_macro_input,DeriveInput};
 
 #[proc_macro_derive(Builder)]
 pub fn derive(input: TokenStream) -> TokenStream {
-    let _input2 = input.clone();
-    // let input1 = parse_macro_input!(input as DeriveInput);
+    let input2 = input.clone();
+    let input3 = input.clone();
+
+    let parsed_input : DeriveInput = syn::parse(input3).unwrap();
+    let parsed_input1 = parse_macro_input!(input as DeriveInput);
+    
+    
+
+    assert_eq!(parsed_input.ident,"Command");
     let test_type = quote!(String);
 
-    let output2  = quote!( 
-        struct Command2 { 
-            test : usize,
-            test2 : #test_type,
-        }
-        ).into();
-    eprintln!("output is {:#?}",output2);
-    let parsed_output = parse_macro_input!(output2 as DeriveInput);
-    eprintln!("Parsed output is {:#?}",parsed_output);
-
-
-    // Used in the quasi-quotation below as `#name`.
 
 //    eprintln!("Input is {:#?}",input2);
 //    eprintln!("........");
-    //eprintln!("Parsed Input is {:#?}",input1);
+    if let syn::Data::Struct(d) = parsed_input.data {
+        //eprintln!("Parsed Input is {:#?}",d);
+        if let syn::Fields::Named(f) = d.fields {
+            //eprintln!("named is {:#?}",f.named);
+            eprintln!("There are {} entries",f.named.len());
+            for x in f.named {
+                eprintln!("Field {}  type {:#?}",x.ident.unwrap(),x.ty);
+            }
+        }
+        else {
+            eprintln!("fields are {:#?}",d.fields);
+        }
+    }
+    else {
+        eprintln!("Did not match Parsed Input is {:#?}",parsed_input.data);
+    }
+    eprintln!("Original input {:#?}",input2);
     let output : proc_macro::TokenStream = quote!( 
         impl Command { 
             pub fn builder() { }
@@ -31,7 +42,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
         } 
         struct newOne {
             field1 : usize,
-            fieedl2 : usize,
+            field2 : #test_type,
         }
         ).into();
     return output
