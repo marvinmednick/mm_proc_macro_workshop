@@ -31,4 +31,13 @@ pub struct Command {
     current_dir: String,
 }
 
+#[derive(Builder)]
+pub struct Command2 {
+    executable: String,
+    args: Vec<String>,
+    env: Vec<String>,
+    current_dir: String,
+}
+
+
 fn main() {}
