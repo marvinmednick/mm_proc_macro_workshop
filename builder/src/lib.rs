@@ -1,5 +1,5 @@
 use proc_macro::{TokenStream};
-use quote::{quote,format_ident};
+use quote::{quote,format_ident, ToTokens};
 use syn::{parse_macro_input,DeriveInput};
 
 #[proc_macro_derive(Builder)]
@@ -14,18 +14,22 @@ pub fn derive(input: TokenStream) -> TokenStream {
     let builder_name = format_ident!("{}Builder",struct_name);
    // assert_eq!(parsed_input.ident,"Command");
     //let test_type = quote!(String);
+    //
 
 
 //    eprintln!("Input is {:#?}",input2);
 //    eprintln!("........");
     if let syn::Data::Struct(d) = parsed_input.data {
         //eprintln!("Parsed Input is {:#?}",d);
-        if let syn::Fields::Named(_f) = d.fields {
+        if let syn::Fields::Named(f) = d.fields {
             //eprintln!("named is {:#?}",f.named);
             //eprintln!("There are {} entries",f.named.len());
-        //    for x in f.named {
-         //       eprintln!("Field {}  type {:#?}",x.ident.unwrap(),x.ty);
-          //  }
+            let mut i = 1;
+            for x in f.named {
+               eprintln!("Field number {}",i);
+               i += 1;
+               eprintln!("Field {}  type {:#?}",x.ident.unwrap(),x.ty.into_token_stream());
+            }
         }
         else {
             eprintln!("fields are {:#?}",d.fields);
@@ -34,6 +38,8 @@ pub fn derive(input: TokenStream) -> TokenStream {
     else {
         eprintln!("Did not match Parsed Input is {:#?}",parsed_input.data);
     }
+    let test1 : proc_macro::TokenStream = quote!(xyz : String).into();
+    eprintln!("test1 is {}",test1);
     // eprintln!("Original input {:#?}",input2);
     let output : proc_macro::TokenStream = quote!( 
          pub struct #builder_name {
@@ -53,6 +59,13 @@ pub fn derive(input: TokenStream) -> TokenStream {
                 }
             }
         } 
+        impl #builder_name {
+            fn executable(&mut self, executable: String) -> &mut Self {
+                self.executable = Some(executable);
+                self
+            }
+        }
+
         ).into();
     return output
 }
