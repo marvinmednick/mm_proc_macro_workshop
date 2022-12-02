@@ -13,15 +13,11 @@ pub fn derive(input: TokenStream) -> TokenStream {
     let struct_name = parsed_input.ident;
     let builder_name = format_ident!("{}Builder",struct_name);
     let test_name = format_ident!("{}Test",struct_name);
-   // assert_eq!(parsed_input.ident,"Command");
-    //let test_type = quote!(String);
-    //
 
 
-//    eprintln!("Input is {:#?}",input2);
-//    eprintln!("........");
     let mut my_field_name = Vec::<syn::Ident>::new();
     let mut my_field_type = Vec::<syn::Type>::new();
+
     if let syn::Data::Struct(d) = parsed_input.data {
         //eprintln!("Parsed Input is {:#?}",d);
         if let syn::Fields::Named(f) = d.fields {
@@ -51,12 +47,6 @@ pub fn derive(input: TokenStream) -> TokenStream {
             #(#my_field_name : Option<#my_field_type>),* ,
          }
          
-        pub struct #test_name  {
-            test_before: usize,
-            #(#my_field_name : Option<#my_field_type>),* ,
-            test_after: usize,
-        }
-
         impl #struct_name { 
             pub fn builder() -> #builder_name {
                 #builder_name {
@@ -65,10 +55,12 @@ pub fn derive(input: TokenStream) -> TokenStream {
             }
         } 
         impl #builder_name {
-            fn executable(&mut self, executable: String) -> &mut Self {
-                self.executable = Some(executable);
+            #(fn #my_field_name (&mut self, #my_field_name: #my_field_type) -> &mut Self {
+                self.#my_field_name = Some(#my_field_name);
                 self
             }
+
+            )*
         }
 
 
