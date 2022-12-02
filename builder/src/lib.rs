@@ -1,4 +1,4 @@
-use proc_macro::{TokenStream};
+use proc_macro::{TokenStream, Ident};
 use quote::{quote,format_ident, ToTokens};
 use syn::{parse_macro_input,DeriveInput};
 
@@ -12,6 +12,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
     
     let struct_name = parsed_input.ident;
     let builder_name = format_ident!("{}Builder",struct_name);
+    let test_name = format_ident!("{}Test",struct_name);
    // assert_eq!(parsed_input.ident,"Command");
     //let test_type = quote!(String);
     //
@@ -19,6 +20,8 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
 //    eprintln!("Input is {:#?}",input2);
 //    eprintln!("........");
+    let mut my_field_name = Vec::<syn::Ident>::new();
+    let mut my_field_type = Vec::<syn::Type>::new();
     if let syn::Data::Struct(d) = parsed_input.data {
         //eprintln!("Parsed Input is {:#?}",d);
         if let syn::Fields::Named(f) = d.fields {
@@ -28,7 +31,9 @@ pub fn derive(input: TokenStream) -> TokenStream {
             for x in f.named {
                eprintln!("Field number {}",i);
                i += 1;
-               eprintln!("Field {}  type {:#?}",x.ident.unwrap(),x.ty.into_token_stream());
+//               eprintln!("Field {}  type {:#?}",x.ident.unwrap().as_ref(),x.ty.into_token_stream());
+               my_field_name.push(x.ident.unwrap());
+               my_field_type.push(x.ty);
             }
         }
         else {
@@ -43,19 +48,19 @@ pub fn derive(input: TokenStream) -> TokenStream {
     // eprintln!("Original input {:#?}",input2);
     let output : proc_macro::TokenStream = quote!( 
          pub struct #builder_name {
-             executable: Option<String>,
-             args: Option<Vec<String>>,
-             env: Option<Vec<String>>,
-             current_dir: Option<String>,
+            #(#my_field_name : Option<#my_field_type>),* ,
          }
          
+        pub struct #test_name  {
+            test_before: usize,
+            #(#my_field_name : Option<#my_field_type>),* ,
+            test_after: usize,
+        }
+
         impl #struct_name { 
             pub fn builder() -> #builder_name {
                 #builder_name {
-                    executable: None,
-                    args: None,
-                    env: None,
-                    current_dir: None,
+                    #(#my_field_name : None ),* ,
                 }
             }
         } 
@@ -65,6 +70,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
                 self
             }
         }
+
 
         ).into();
     return output
