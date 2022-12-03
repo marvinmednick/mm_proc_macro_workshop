@@ -1,6 +1,8 @@
 use proc_macro::{TokenStream, Ident};
 use quote::{quote,format_ident, ToTokens};
 use syn::{parse_macro_input,DeriveInput};
+use std::error::Error;
+
 
 #[proc_macro_derive(Builder)]
 pub fn derive(input: TokenStream) -> TokenStream {
@@ -54,14 +56,34 @@ pub fn derive(input: TokenStream) -> TokenStream {
                 }
             }
         } 
+
+        use std::error::Error;
         impl #builder_name {
             #(fn #my_field_name (&mut self, #my_field_name: #my_field_type) -> &mut Self {
                 self.#my_field_name = Some(#my_field_name);
                 self
             }
 
-            )*
+            )* 
+
+            fn build(&mut self) -> Result<#builder_name, Box<dyn Error>> {
+
+                let mut missing_count = 0;
+                #(if self.#my_field_name == None { missing_count +=1 };)*
+
+
+                if missing_count == 0 {
+                    Ok(self)
+                } 
+                else {
+                    Err(Box::new(Error("Ooops".into())))
+                }
+            }
+
         }
+        impl CommandBuilder {
+        }
+
 
 
         ).into();
