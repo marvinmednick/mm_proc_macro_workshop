@@ -1,7 +1,6 @@
-use proc_macro::{TokenStream, Ident};
-use quote::{quote,format_ident, ToTokens};
+use proc_macro::TokenStream;
+use quote::{quote,format_ident };
 use syn::{parse_macro_input,DeriveInput};
-use std::error::Error;
 
 
 #[proc_macro_derive(Builder)]
@@ -14,7 +13,6 @@ pub fn derive(input: TokenStream) -> TokenStream {
     
     let struct_name = parsed_input.ident;
     let builder_name = format_ident!("{}Builder",struct_name);
-    let test_name = format_ident!("{}Test",struct_name);
 
 
     let mut my_field_name = Vec::<syn::Ident>::new();
@@ -25,10 +23,10 @@ pub fn derive(input: TokenStream) -> TokenStream {
         if let syn::Fields::Named(f) = d.fields {
             //eprintln!("named is {:#?}",f.named);
             //eprintln!("There are {} entries",f.named.len());
-            let mut i = 1;
+            //let mut i = 1;
             for x in f.named {
-               eprintln!("Field number {}",i);
-               i += 1;
+          //     eprintln!("Field number {}",i);
+            //   i += 1;
 //               eprintln!("Field {}  type {:#?}",x.ident.unwrap().as_ref(),x.ty.into_token_stream());
                my_field_name.push(x.ident.unwrap());
                my_field_type.push(x.ty);
@@ -41,8 +39,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
     else {
         eprintln!("Did not match Parsed Input is {:#?}",parsed_input.data);
     }
-    let test1 : proc_macro::TokenStream = quote!(xyz : String).into();
-    eprintln!("test1 is {}",test1);
+//    let test1 : proc_macro::TokenStream = quote!(xyz : String).into();
     // eprintln!("Original input {:#?}",input2);
     let output : proc_macro::TokenStream = quote!( 
          pub struct #builder_name {
@@ -57,7 +54,6 @@ pub fn derive(input: TokenStream) -> TokenStream {
             }
         } 
 
-        use std::error::Error;
         impl #builder_name {
             #(fn #my_field_name (&mut self, #my_field_name: #my_field_type) -> &mut Self {
                 self.#my_field_name = Some(#my_field_name);
@@ -66,22 +62,30 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
             )* 
 
-            fn build(&mut self) -> Result<#builder_name, Box<dyn Error>> {
+            fn build(&mut self) -> Result<#struct_name,  &'static str> {
 
                 let mut missing_count = 0;
                 #(if self.#my_field_name == None { missing_count +=1 };)*
 
 
+                 let x = #struct_name {
+                #(#my_field_name:  self.#my_field_name.clone().unwrap(),)*
+//                    executable: self.executable.clone().unwrap(),
+ //                   args: vec!["a".to_string(), "1".to_string()],
+  //                  env: vec!["".to_string()],
+   //                 current_dir: "".to_string(),
+                 };
+
                 if missing_count == 0 {
-                    Ok(self)
+                    Ok(x)
                 } 
                 else {
-                    Err(Box::new(Error("Ooops".into())))
+//                    Ok(x)
+ //                   Err(Box::new(::std::error::Error("Ooops".into())))
+                   Err("Fields missing")
                 }
             }
 
-        }
-        impl CommandBuilder {
         }
 
 
