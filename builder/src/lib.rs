@@ -62,7 +62,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
             )* 
 
-            fn build(&mut self) -> Result<#struct_name,  &'static str> {
+            fn build(&mut self) -> Result<#struct_name,  Box<dyn std::error::Error>> {
 
                 let mut missing_count = 0;
                 #(if self.#my_field_name == None { missing_count +=1 };)*
@@ -80,9 +80,12 @@ pub fn derive(input: TokenStream) -> TokenStream {
                     Ok(x)
                 } 
                 else {
-//                    Ok(x)
+//   ;                 Ok(x)
+                        let err = std::format!("field missing");
+                        return std::result::Result::Err(err.into())
+
  //                   Err(Box::new(::std::error::Error("Ooops".into())))
-                   Err("Fields missing")
+//                   Err("Fields missing")
                 }
             }
 
