@@ -21,13 +21,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
     if let syn::Data::Struct(d) = parsed_input.data {
         //eprintln!("Parsed Input is {:#?}",d);
         if let syn::Fields::Named(f) = d.fields {
-            //eprintln!("named is {:#?}",f.named);
-            //eprintln!("There are {} entries",f.named.len());
-            //let mut i = 1;
             for x in f.named {
-          //     eprintln!("Field number {}",i);
-            //   i += 1;
-//               eprintln!("Field {}  type {:#?}",x.ident.unwrap().as_ref(),x.ty.into_token_stream());
                my_field_name.push(x.ident.unwrap());
                my_field_type.push(x.ty);
             }
@@ -39,8 +33,6 @@ pub fn derive(input: TokenStream) -> TokenStream {
     else {
         eprintln!("Did not match Parsed Input is {:#?}",parsed_input.data);
     }
-//    let test1 : proc_macro::TokenStream = quote!(xyz : String).into();
-    // eprintln!("Original input {:#?}",input2);
     let output : proc_macro::TokenStream = quote!( 
          pub struct #builder_name {
             #(#my_field_name : Option<#my_field_type>),* ,
@@ -68,24 +60,17 @@ pub fn derive(input: TokenStream) -> TokenStream {
                 #(if self.#my_field_name == None { missing_count +=1 };)*
 
 
+                if missing_count == 0 {
                  let x = #struct_name {
-                #(#my_field_name:  self.#my_field_name.clone().unwrap(),)*
-//                    executable: self.executable.clone().unwrap(),
- //                   args: vec!["a".to_string(), "1".to_string()],
-  //                  env: vec!["".to_string()],
-   //                 current_dir: "".to_string(),
+                    #(#my_field_name:  self.#my_field_name.clone().unwrap(),)*
                  };
 
-                if missing_count == 0 {
                     Ok(x)
                 } 
                 else {
-//   ;                 Ok(x)
-                        let err = std::format!("field missing");
-                        return std::result::Result::Err(err.into())
+                    let err = std::format!("field missing");
+                    return std::result::Result::Err(err.into())
 
- //                   Err(Box::new(::std::error::Error("Ooops".into())))
-//                   Err("Fields missing")
                 }
             }
 
