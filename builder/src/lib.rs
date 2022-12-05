@@ -14,12 +14,14 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
 
     let mut my_field_name = Vec::<syn::Ident>::new();
+    let mut my_field_name_strings = Vec::<String>::new();
     let mut my_field_type = Vec::<syn::Type>::new();
 
     if let syn::Data::Struct(d) = parsed_input.data {
         if let syn::Fields::Named(f) = d.fields {
             for x in f.named {
-               my_field_name.push(x.ident.unwrap());
+               my_field_name.push(x.clone().ident.unwrap());
+               my_field_name_strings.push(format!("{}",x.ident.unwrap()));
                my_field_type.push(x.ty);
             }
         }
@@ -29,6 +31,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
     }
     else {
         eprintln!("Did not match Parsed Input is {:#?}",parsed_input.data);
+//
     }
     let output : proc_macro::TokenStream = quote!( 
          pub struct #builder_name {
@@ -53,19 +56,17 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
             fn build(&mut self) -> Result<#struct_name,  Box<dyn std::error::Error>> {
 
-                let mut missing_count = 0;
-                let mut missing_fields : Vec<String> = vec![];
+                let mut missing_fields = Vec::<String>::new();
                 #(
                     if self.#my_field_name == None {
-                        missing_count +=1;
-                        missing_fields.append("#my_field_name".to_string());
-
+                        missing_fields.push(#my_field_name_strings.to_string());
+//                        missing_fields.push(std::stringify!(#my_field_name).to_string);
                     };
                 )*
 
 
 
-                if missing_count == 0 {
+                if missing_fields.len() == 0 {
                     let x = #struct_name {
                        #(#my_field_name:  self.#my_field_name.clone().unwrap(),)*
                     };
@@ -73,7 +74,8 @@ pub fn derive(input: TokenStream) -> TokenStream {
                     Ok(x)
                 } 
                 else {
-                    let err = std::format!("field missing");
+                    let missing_list = missing_fields.join(",");
+                    let err = format!("The following fields are not yet set: {}",missing_list);
                     return std::result::Result::Err(err.into())
 
                 }
