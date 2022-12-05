@@ -1,27 +1,18 @@
 use proc_macro::TokenStream;
-use quote::{quote,format_ident };
+use quote::{quote,format_ident};
 use syn::DeriveInput;
 
-fn get_type_info(ty : syn::Type) -> (syn::Type, bool) {
-    let mut is_option = false;
-    if let syn::Type::Path(type_path) = ty.clone() {
-        let num_segs = type_path.path.segments.len();
-        /*
-        eprintln!("Num of segs {:?}",num_segs);
-        for i in 0..num_segs {
-            eprintln!("seg is {:?}",type_path.path.segments[i]);
-            let www  = type_path.path.segments[i].clone() ;
-            eprintln!("www ident   is {:?}",www.ident);
-            if www.ident == "Option" {
-                eprintln!("Found option!!!");
-            }
-            eprintln!("www arguments  is {:?}",www.arguments);
-        }
-        eprintln!("last seg is {:#?}",type_path.path.segments.last());
-        */
+fn unwrapped_option_type<'a>(ty : &'a syn::Type) -> Option<&'a syn::Type> {
+
+    // check that path is of a type 
+    if let syn::Type::Path(type_path) = ty {
+
+        // default return to None
+        // get the last segment
         if let Some(seg) = type_path.path.segments.last() {
+            // check if its not
             if seg.ident == "Option" {
-                eprintln!("Found option!!!");
+//                eprintln!("Found option!!!");
                 if let syn::PathArguments::AngleBracketed(
                     syn::AngleBracketedGenericArguments {
                         ref args,
@@ -29,7 +20,8 @@ fn get_type_info(ty : syn::Type) -> (syn::Type, bool) {
                     }
                 ) = seg.arguments {
                     if let Some(syn::GenericArgument::Type(inner_type)) = args.first() {
-                        eprintln!("with Inner type is {:#?}", inner_type);
+ //                       eprintln!("with Inner type is {:#?}", inner_type);
+                        return Some(inner_type)
                     }
                 }
 
@@ -37,7 +29,8 @@ fn get_type_info(ty : syn::Type) -> (syn::Type, bool) {
         }
 
     }
-    (ty, is_option)
+    // default to None if doesn't match
+    return None
 }
 
 #[proc_macro_derive(Builder)]
@@ -52,15 +45,42 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
 
     let mut my_field_name = Vec::<syn::Ident>::new();
+ //   let mut my_field_optional = Vec::<bool>::new();
     let mut my_field_type = Vec::<syn::Type>::new();
+    let mut my_field_value = Vec::<proc_macro2::TokenStream>::new();
 
     if let syn::Data::Struct(d) = parsed_input.data {
         if let syn::Fields::Named(f) = d.fields {
-            eprintln!("fields are {:#?}",f.named);
+//            eprintln!("fields are {:#?}",f.named);
             for x in f.named {
-               my_field_name.push(x.clone().ident.unwrap());
-               let (updated_type, is_option) = get_type_info(x.ty);
-               my_field_type.push(updated_type);
+               let cur_name = x.clone().ident.unwrap();
+               my_field_name.push(cur_name.clone());
+    //           my_field_type.push(x.ty.clone());
+//               my_field_optional.push(false);
+//
+               let updated = unwrapped_option_type(&x.ty);
+//               eprintln!("Updated is {:?}",updated);
+               if let Some(updated_type) = updated {
+ //                  eprintln!("Orig type {:?}",x.ty);
+   //                eprintln!("Updated type {:?}",updated_type);
+                   my_field_value.push(quote!(self.#cur_name.clone()));
+                   my_field_type.push(updated_type.clone());
+                }
+                else {
+                   my_field_value.push(quote!(self.#cur_name.clone().unwrap()));
+                   my_field_type.push(x.ty);
+                }
+    //            eprintln!("my field value {:#?}",my_field_value);
+/*
+                   my_field_optional.push(false);
+//                   my_field_value.push(quote!(self.#cur_name.clone()).into());
+               }
+               else {
+                   my_field_type.push(x.ty);
+                   my_field_optional.push(false);
+//                   my_field_value.push(quote!(self.#cur_name.clone().unwrap()).into());
+                }
+*/
             }
         }
         else {
@@ -101,9 +121,12 @@ pub fn derive(input: TokenStream) -> TokenStream {
                     };
                 )*
 
-                if missing_fields.len() == 0 {
+                if missing_fields.len() == 0 || true {
+//                    let z = #my_field_value ;
                     let x = #struct_name {
-                       #(#my_field_name:  self.#my_field_name.clone().unwrap(),)*
+                       //#(#my_field_name:  if #my_field_optional { self.#my_field_name.clone() } else { self.#my_field_name.clone().unwrap() } ,)*
+//                       #(#my_field_name:    self.#my_field_name.clone().unwrap() ,)*
+                       #(#my_field_name:    #my_field_value ,)*
                     };
 
                     Ok(x)
