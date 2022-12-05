@@ -14,14 +14,12 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
 
     let mut my_field_name = Vec::<syn::Ident>::new();
-    let mut my_field_name_strings = Vec::<String>::new();
     let mut my_field_type = Vec::<syn::Type>::new();
 
     if let syn::Data::Struct(d) = parsed_input.data {
         if let syn::Fields::Named(f) = d.fields {
             for x in f.named {
                my_field_name.push(x.clone().ident.unwrap());
-               my_field_name_strings.push(format!("{}",x.ident.unwrap()));
                my_field_type.push(x.ty);
             }
         }
@@ -59,12 +57,9 @@ pub fn derive(input: TokenStream) -> TokenStream {
                 let mut missing_fields = Vec::<String>::new();
                 #(
                     if self.#my_field_name == None {
-                        missing_fields.push(#my_field_name_strings.to_string());
-//                        missing_fields.push(std::stringify!(#my_field_name).to_string);
+                        missing_fields.push(std::stringify!(#my_field_name).to_string());
                     };
                 )*
-
-
 
                 if missing_fields.len() == 0 {
                     let x = #struct_name {
