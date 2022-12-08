@@ -33,11 +33,12 @@ fn unwrapped_option_type<'a>(ty : &'a syn::Type) -> Option<&'a syn::Type> {
     return None
 }
 
-#[proc_macro_derive(Builder)]
+#[proc_macro_derive(Builder, attributes(builder))]
 pub fn derive(input: TokenStream) -> TokenStream {
     let input3 = input.clone();
 
     let parsed_input : DeriveInput = syn::parse(input3).unwrap();
+    eprintln!("parsed input data {:?}",parsed_input.data);
     
     
     let struct_name = parsed_input.ident;
@@ -45,9 +46,22 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
 
     let mut my_field_name = Vec::<syn::Ident>::new();
- //   let mut my_field_optional = Vec::<bool>::new();
     let mut my_field_type = Vec::<syn::Type>::new();
     let mut my_field_value = Vec::<proc_macro2::TokenStream>::new();
+
+
+
+    let fields = if let syn::Data::Struct(
+        syn::DataStruct {
+            fields: syn::Fields::Named(syn::FieldsNamed {
+                ref named, ..
+                }),
+            ..
+        }
+    ) = parsed_input.data { named }
+    else {
+        unimplemented!();
+    };
 
     if let syn::Data::Struct(d) = parsed_input.data {
         if let syn::Fields::Named(f) = d.fields {
@@ -55,14 +69,11 @@ pub fn derive(input: TokenStream) -> TokenStream {
             for x in f.named {
                let cur_name = x.clone().ident.unwrap();
                my_field_name.push(cur_name.clone());
-    //           my_field_type.push(x.ty.clone());
-//               my_field_optional.push(false);
-//
+               eprintln!("Field {:?}",cur_name);
+               eprintln!("Field attributes {:#?}",x.attrs);
+
                let updated = unwrapped_option_type(&x.ty);
-//               eprintln!("Updated is {:?}",updated);
                if let Some(updated_type) = updated {
- //                  eprintln!("Orig type {:?}",x.ty);
-   //                eprintln!("Updated type {:?}",updated_type);
                    my_field_value.push(quote!(self.#cur_name.clone()));
                    my_field_type.push(updated_type.clone());
                 }
@@ -70,17 +81,6 @@ pub fn derive(input: TokenStream) -> TokenStream {
                    my_field_value.push(quote!(self.#cur_name.clone().unwrap()));
                    my_field_type.push(x.ty);
                 }
-    //            eprintln!("my field value {:#?}",my_field_value);
-/*
-                   my_field_optional.push(false);
-//                   my_field_value.push(quote!(self.#cur_name.clone()).into());
-               }
-               else {
-                   my_field_type.push(x.ty);
-                   my_field_optional.push(false);
-//                   my_field_value.push(quote!(self.#cur_name.clone().unwrap()).into());
-                }
-*/
             }
         }
         else {
