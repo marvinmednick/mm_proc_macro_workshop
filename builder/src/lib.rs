@@ -12,7 +12,6 @@ fn unwrapped_option_type<'a>(ty : &'a syn::Type) -> Option<&'a syn::Type> {
         if let Some(seg) = type_path.path.segments.last() {
             // check if its not
             if seg.ident == "Option" {
-//                eprintln!("Found option!!!");
                 if let syn::PathArguments::AngleBracketed(
                     syn::AngleBracketedGenericArguments {
                         ref args,
@@ -20,7 +19,6 @@ fn unwrapped_option_type<'a>(ty : &'a syn::Type) -> Option<&'a syn::Type> {
                     }
                 ) = seg.arguments {
                     if let Some(syn::GenericArgument::Type(inner_type)) = args.first() {
- //                       eprintln!("with Inner type is {:#?}", inner_type);
                         return Some(inner_type)
                     }
                 }
@@ -38,17 +36,11 @@ pub fn derive(input: TokenStream) -> TokenStream {
     let input3 = input.clone();
 
     let parsed_input : DeriveInput = syn::parse(input3).unwrap();
-    eprintln!("parsed input data {:?}",parsed_input.data);
-    
+    let parsed_copy = parsed_input.clone();
+
     
     let struct_name = parsed_input.ident;
     let builder_name = format_ident!("{}Builder",struct_name);
-
-
-    let mut my_field_name = Vec::<syn::Ident>::new();
-    let mut my_field_type = Vec::<syn::Type>::new();
-    let mut my_field_value = Vec::<proc_macro2::TokenStream>::new();
-
 
 
     let fields = if let syn::Data::Struct(
@@ -58,19 +50,86 @@ pub fn derive(input: TokenStream) -> TokenStream {
                 }),
             ..
         }
-    ) = parsed_input.data { named }
+    ) = parsed_copy.data { named }
     else {
         unimplemented!();
     };
 
+    // builder structure fields
+    let builder_def_fields = fields.iter().map(|f| {
+       let name = &f.ident;
+       let ty = match  unwrapped_option_type(&f.ty) {
+           Some(updated) => updated,
+           None => &f.ty,
+        };
+
+        quote!{  #name: std::option::Option<#ty> }
+    });
+
+    // Builder default values
+    let builder_init_fields = fields.iter().map(|f|
+        {
+           let name = &f.ident;
+           quote!{  #name: None } 
+       });
+
+    // Builder Methods
+    let builder_methods = fields.iter().map(|f|
+        {
+           let field_name = &f.ident;
+           let field_type = match  unwrapped_option_type(&f.ty) {
+               Some(updated) => updated,
+               None => &f.ty,
+            };
+           quote!{  
+                fn #field_name (&mut self, #field_name: #field_type) -> &mut Self {
+                    self.#field_name = Some(#field_name);
+                    self
+                }
+           }
+       });
+
+
+    let unset_fields = fields.iter().map(|f| {
+       let field_name = &f.ident;
+       let required_set = match  unwrapped_option_type(&f.ty) {
+           Some(_) => false,
+           None => true,
+        };
+       quote! {
+           if #required_set && self.#field_name == None {
+               Some(std::stringify!(#field_name).to_string())
+           }
+           else {
+            None
+            }
+        }
+    });
+
+    // Output of build fields
+    let output_fields = fields.iter().map(|f|
+        {
+           let field_name = &f.ident;
+           let output = match  unwrapped_option_type(&f.ty) {
+               Some(_) => quote! { #field_name : self.#field_name.clone() },
+               None =>    quote! { #field_name : self.#field_name.clone().unwrap() },
+            };
+           output
+       });
+        
+/*
+    
+    let mut my_field_name = Vec::<syn::Ident>::new();
+    let mut my_field_type = Vec::<syn::Type>::new();
+    let mut my_field_value = Vec::<proc_macro2::TokenStream>::new();
+
+
     if let syn::Data::Struct(d) = parsed_input.data {
         if let syn::Fields::Named(f) = d.fields {
-//            eprintln!("fields are {:#?}",f.named);
+
             for x in f.named {
                let cur_name = x.clone().ident.unwrap();
                my_field_name.push(cur_name.clone());
-               eprintln!("Field {:?}",cur_name);
-               eprintln!("Field attributes {:#?}",x.attrs);
 
                let updated = unwrapped_option_type(&x.ty);
                if let Some(updated_type) = updated {
@@ -89,50 +148,41 @@ pub fn derive(input: TokenStream) -> TokenStream {
     }
     else {
         eprintln!("Did not match Parsed Input is {:#?}",parsed_input.data);
-//
+        
     }
+*/
+
     let output : proc_macro::TokenStream = quote!( 
          pub struct #builder_name {
-            #(#my_field_name : Option<#my_field_type>),* ,
+            #(#builder_def_fields,)*
          }
          
         impl #struct_name { 
             pub fn builder() -> #builder_name {
                 #builder_name {
-                    #(#my_field_name : None ),* ,
+                    #(#builder_init_fields, )* 
                 }
             }
         } 
 
         impl #builder_name {
-            #(fn #my_field_name (&mut self, #my_field_name: #my_field_type) -> &mut Self {
-                self.#my_field_name = Some(#my_field_name);
-                self
-            }
 
-            )* 
+            #(#builder_methods)*  
 
             fn build(&mut self) -> Result<#struct_name,  Box<dyn std::error::Error>> {
 
-                let mut missing_fields = Vec::<String>::new();
-                #(
-                    if self.#my_field_name == None {
-                        missing_fields.push(std::stringify!(#my_field_name).to_string());
-                    };
-                )*
+                let missing : Vec<String> = vec![ #(#unset_fields),* ].into_iter().filter_map(|e| e).collect();
 
-                if missing_fields.len() == 0 || true {
-//                    let z = #my_field_value ;
+                if missing.len() == 0 {
                     let x = #struct_name {
-                       //#(#my_field_name:  if #my_field_optional { self.#my_field_name.clone() } else { self.#my_field_name.clone().unwrap() } ,)*
-//                       #(#my_field_name:    self.#my_field_name.clone().unwrap() ,)*
-                       #(#my_field_name:    #my_field_value ,)*
+                        #(#output_fields),* ,
+//                       #(#my_field_name:    #my_field_value ,)*
                     };
 
                     Ok(x)
                 } 
                 else {
-                    let missing_list = missing_fields.join(",");
+                    let missing_list = missing.join(",");
                     let err = format!("The following fields are not yet set: {}",missing_list);
                     return std::result::Result::Err(err.into())
 
