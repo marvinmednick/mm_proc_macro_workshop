@@ -116,42 +116,9 @@ pub fn derive(input: TokenStream) -> TokenStream {
             };
            output
        });
-        
-/*
-    
-    let mut my_field_name = Vec::<syn::Ident>::new();
-    let mut my_field_type = Vec::<syn::Type>::new();
-    let mut my_field_value = Vec::<proc_macro2::TokenStream>::new();
 
-
-    if let syn::Data::Struct(d) = parsed_input.data {
-        if let syn::Fields::Named(f) = d.fields {
-
-            for x in f.named {
-               let cur_name = x.clone().ident.unwrap();
-               my_field_name.push(cur_name.clone());
-
-               let updated = unwrapped_option_type(&x.ty);
-               if let Some(updated_type) = updated {
-                   my_field_value.push(quote!(self.#cur_name.clone()));
-                   my_field_type.push(updated_type.clone());
-                }
-                else {
-                   my_field_value.push(quote!(self.#cur_name.clone().unwrap()));
-                   my_field_type.push(x.ty);
-                }
-            }
-        }
-        else {
-            eprintln!("fields are {:#?}",d.fields);
-        }
-    }
-    else {
-        eprintln!("Did not match Parsed Input is {:#?}",parsed_input.data);
-        
-    }
-*/
-
+    //
+    // OUTPUT
     let output : proc_macro::TokenStream = quote!( 
          pub struct #builder_name {
             #(#builder_def_fields,)*
