@@ -1,10 +1,11 @@
 use proc_macro::TokenStream;
 use quote::{quote,format_ident};
-use syn::DeriveInput;
+use syn::{DeriveInput, PathSegment};
 
 fn unwrapped_option_type<'a>(ty : &'a syn::Type) -> Option<&'a syn::Type> {
 
     // check that path is of a type 
+    
     if let syn::Type::Path(type_path) = ty {
 
         // default return to None
@@ -38,6 +39,9 @@ pub fn derive(input: TokenStream) -> TokenStream {
     let parsed_input : DeriveInput = syn::parse(input3).unwrap();
     let parsed_copy = parsed_input.clone();
 
+//    eprintln!("Parsed Tree {:#?}",parsed_copy);
+//    eprintln!("Parsed Tree -------- END");
+
     
     let struct_name = parsed_input.ident;
     let builder_name = format_ident!("{}Builder",struct_name);
@@ -58,10 +62,24 @@ pub fn derive(input: TokenStream) -> TokenStream {
     // builder structure fields
     let builder_def_fields = fields.iter().map(|f| {
        let name = &f.ident;
+       let attr_list = &f.attrs;
+//       eprintln!("NEW Field {:?}  len Attr: {} ATTR: {:#?}",name, attr_list.len(),attr_list);
        let ty = match  unwrapped_option_type(&f.ty) {
            Some(updated) => updated,
            None => &f.ty,
         };
+
+       for a in attr_list {
+           let path = &a.path;
+           let tokens = &a.tokens;
+           if path.segments.len() > 0 && path.segments[0].ident == "builder" {
+                   eprintln!("FOUND a builder attribute");
+                   eprintln!("tokens {:?}",tokens);
+                   let parsed = a.parse_meta();
+                   eprintln!("Parsed {:#?}",parsed);
+            }
+       }
+       
 
         quote!{  #name: std::option::Option<#ty> }
     });
