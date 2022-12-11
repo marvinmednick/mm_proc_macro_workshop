@@ -61,7 +61,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
     // builder structure fields
     let builder_def_fields = fields.iter().map(|f| {
-       let name = &f.ident;
+       let name = &f.ident.clone().unwrap();
        let attr_list = &f.attrs;
 //       eprintln!("NEW Field {:?}  len Attr: {} ATTR: {:#?}",name, attr_list.len(),attr_list);
        let ty = match  unwrapped_option_type(&f.ty) {
@@ -101,9 +101,23 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
                                         let lp = ls.value();
                                        eprintln!("Nested First lit {:?}",lit);
+                                       eprintln!("Nested First ls {:?}",ls);
                                        eprintln!(" lit parse {:#?}",lp);
                                        let l_id =  format_ident!("{}",lp);
                                        eprintln!(" lit parse {:#?} {}",lp,l_id);
+                                       // at this point there are two options
+                                       // if the each version name is the same as field name,
+                                       // output only the individual one
+                                       // if the each version name is different output both the
+                                       // originand the each version
+//                                       let indiv_method = syn::Ident::new(l_id,ls.span())
+                                       if name == &l_id {
+                                           eprintln!("Names match need to only output a single function named {}",l_id);
+                                        }
+                                       else {
+                                           eprintln!("Names DONT match output vector function {} and {}",name, l_id);
+                                        }
+
                                    }
 
 
