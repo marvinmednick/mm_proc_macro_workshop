@@ -69,7 +69,8 @@ pub fn derive(input: TokenStream) -> TokenStream {
            None => &f.ty,
         };
 
-       for a in attr_list {
+
+       for a in &f.attrs {
            let path = &a.path;
            let tokens = &a.tokens;
            if path.segments.len() > 0 && path.segments[0].ident == "builder" {
@@ -77,6 +78,46 @@ pub fn derive(input: TokenStream) -> TokenStream {
                    eprintln!("tokens {:?}",tokens);
                    let parsed = a.parse_meta();
                    eprintln!("Parsed {:#?}",parsed);
+
+                   let meta = match parsed {
+                       Ok(syn::Meta::List(syn::MetaList { path, nested, ..  } ))  => {
+                           eprintln!("path  {:#?}",path);
+                           eprintln!("path ident {:?}",path.segments[0].ident);
+                           eprintln!("path  nested {:#?}",nested);
+                           if nested.len() != 1 {
+                               panic!("Only one builder option expected");
+                            }
+                           eprintln!("Nested first = {:#?}",nested.first().unwrap());
+                           match nested.first() {
+                               Some(syn::NestedMeta::Meta(syn::Meta::NameValue(syn::MetaNameValue {path, eq_token, lit } ))) => {
+                                   eprintln!("Nested First decode {:?}",path);
+                                   eprintln!("Nested First decode {:?}",eq_token);
+                                   eprintln!("Nested First decode {:?}",lit);
+                                   if path.segments[0].ident == "each" {
+                                       eprintln!("Found Each");
+                                    }
+                                   if eq_token == token!([=]) {
+
+                                       eprintln!("Found EQ");
+                                    }
+
+                                }
+                               Some(x) => {
+                                   eprintln!("Nested first Got unexpected {:?}",x);
+                                }
+                               
+                               None => {
+                                   eprintln!("None on nested.first");
+                                }
+                            }
+                       },
+                       Ok(other) => {
+                           eprintln!("Got something unexpected");
+                       },
+                       Err(_) => {
+                           eprintln!("Error on parse_meta");
+                       },
+                   };
             }
        }
        
@@ -181,3 +222,5 @@ pub fn derive(input: TokenStream) -> TokenStream {
         ).into();
     return output
 }
+
+
