@@ -75,31 +75,37 @@ pub fn derive(input: TokenStream) -> TokenStream {
            let tokens = &a.tokens;
            if path.segments.len() > 0 && path.segments[0].ident == "builder" {
                    eprintln!("FOUND a builder attribute");
-                   eprintln!("tokens {:?}",tokens);
+   //                eprintln!("tokens {:?}",tokens);
                    let parsed = a.parse_meta();
-                   eprintln!("Parsed {:#?}",parsed);
+   //                eprintln!("Parsed {:#?}",parsed);
 
                    let meta = match parsed {
                        Ok(syn::Meta::List(syn::MetaList { path, nested, ..  } ))  => {
-                           eprintln!("path  {:#?}",path);
-                           eprintln!("path ident {:?}",path.segments[0].ident);
-                           eprintln!("path  nested {:#?}",nested);
+//                           eprintln!("path  {:#?}",path);
+ //                          eprintln!("path ident {:?}",path.segments[0].ident);
+  //                         eprintln!("path  nested {:#?}",nested);
                            if nested.len() != 1 {
                                panic!("Only one builder option expected");
                             }
-                           eprintln!("Nested first = {:#?}",nested.first().unwrap());
+  //                         eprintln!("Nested first = {:#?}",nested.first().unwrap());
                            match nested.first() {
                                Some(syn::NestedMeta::Meta(syn::Meta::NameValue(syn::MetaNameValue {path, eq_token, lit } ))) => {
-                                   eprintln!("Nested First decode {:?}",path);
-                                   eprintln!("Nested First decode {:?}",eq_token);
-                                   eprintln!("Nested First decode {:?}",lit);
                                    if path.segments[0].ident == "each" {
                                        eprintln!("Found Each");
                                     }
-                                   if eq_token == token!([=]) {
+                                   // Eq for MetaNameValue eq_token is ALWAYS Eq so no need to
+                                   // check
+                                   
 
-                                       eprintln!("Found EQ");
-                                    }
+                                   if let syn::Lit::Str (ls) = lit {
+
+                                        let lp = ls.value();
+                                       eprintln!("Nested First lit {:?}",lit);
+                                       eprintln!(" lit parse {:#?}",lp);
+                                       let l_id =  format_ident!("{}",lp);
+                                       eprintln!(" lit parse {:#?} {}",lp,l_id);
+                                   }
+
 
                                 }
                                Some(x) => {
