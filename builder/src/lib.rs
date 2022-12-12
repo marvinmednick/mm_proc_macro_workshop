@@ -89,18 +89,26 @@ pub fn derive(input: TokenStream) -> TokenStream {
                             }
   //                         eprintln!("Nested first = {:#?}",nested.first().unwrap());
                            match nested.first() {
-                               Some(syn::NestedMeta::Meta(syn::Meta::NameValue(syn::MetaNameValue {path, eq_token, lit } ))) => {
+                               Some(syn::NestedMeta::Meta(syn::Meta::NameValue(syn::MetaNameValue {path, eq_token, lit : syn::Lit::Str(ls) } ))) => {
                                    if path.segments[0].ident == "each" {
                                        eprintln!("Found Each");
+                                       eprintln!("Nested First ls {:?}",ls);
+                                       let ls_id =  format_ident!("{}",ls.value());
+                                       if name == &ls_id {
+                                           eprintln!("Names match need to only output a single function named {}",ls_id);
+                                        }
+                                       else {
+                                           eprintln!("Names DONT match output vector function {} and {}",name, ls_id);
+                                        }
                                     }
                                    // Eq for MetaNameValue eq_token is ALWAYS Eq so no need to
                                    // check
                                    
-
+/*
                                    if let syn::Lit::Str (ls) = lit {
 
                                         let lp = ls.value();
-                                       eprintln!("Nested First lit {:?}",lit);
+//                                       eprintln!("Nested First lit {:?}",lit);
                                        eprintln!("Nested First ls {:?}",ls);
                                        eprintln!(" lit parse {:#?}",lp);
                                        let l_id =  format_ident!("{}",lp);
@@ -111,15 +119,9 @@ pub fn derive(input: TokenStream) -> TokenStream {
                                        // if the each version name is different output both the
                                        // originand the each version
 //                                       let indiv_method = syn::Ident::new(l_id,ls.span())
-                                       if name == &l_id {
-                                           eprintln!("Names match need to only output a single function named {}",l_id);
-                                        }
-                                       else {
-                                           eprintln!("Names DONT match output vector function {} and {}",name, l_id);
-                                        }
 
                                    }
-
+*/
 
                                 }
                                Some(x) => {
