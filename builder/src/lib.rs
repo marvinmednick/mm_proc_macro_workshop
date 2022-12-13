@@ -34,124 +34,134 @@ fn unwrapped_option_type<'a>(ty : &'a syn::Type) -> Option<&'a syn::Type> {
 
 
 enum SetFunctionConfig {
-    Individual,
-    Global,
+    Set_Individual,
+    Set_All,
     Both
 }
 
 struct FieldBuildInfo {
-    optional: bool,
     set_config: SetFunctionConfig,
     name : syn::Ident,
     ty: syn::Type,
 
 }
 
-fn is_vec(ty : &syn::Type )  -> bool {
+fn is_vec(ty : &syn::Type )  -> Option<&syn::Type> {
 
     if let syn::Type::Path( syn::TypePath { qself: _, path: syn::Path { leading_colon :  _, segments } }) = ty {
-        if segments.last().unwrap().ident == "Vec"  && 
-        if let syn::PathArguments::AngleBracketed(..) = segments.last().unwrap().arguments { true } else {false} {
-                return true
+        if segments.last().unwrap().ident == "Vec"  {
+            if let syn::PathArguments::AngleBracketed( syn::AngleBracketedGenericArguments { colon2_token: _ , lt_token: _, args, ..}) = &segments.last().unwrap().arguments { 
+                    if let  syn::GenericArgument::Type(inner_type) = args.last().unwrap() {
+                        eprintln!("vec type is {:#?}",inner_type);
+                        return Some(inner_type);
+                    }
+                
+            }
         }
-    } 
-    return false
-
+    }
+    return None;
 }
 
-fn anaylze_fields (f: &syn::Field) -> FieldBuildInfo {
+fn analyze_fields (f: &syn::Field) -> Option<proc_macro2::TokenStream> {
+
+    fn mk_err<T: quote::ToTokens>(t: T) -> Option<proc_macro2::TokenStream> {
+        Some(
+            syn::Error::new_spanned(t, "expected `builder(each = \"...\")`").to_compile_error(),
+        )
+    }
 
     let name = f.ident.clone().unwrap();
+    let attrs = &f.attrs;
     let ty = match  unwrapped_option_type(&f.ty) {
        Some(updated) => updated,
        None => &f.ty,
     }.clone();
 
+    let fn_name = format_ident!("alt_{}",name);
 
-    let  output = if let syn::Field {attrs, ..} = f {
-        
-        // check to see if there is a builder attributee
-        if let Some(a) = attrs.iter().find(|a| a.path.segments[0].ident == "builder") {
-            eprintln!("DEFINE -- for field {:?}  found builder attribute", name);
+    let full_set_function = quote!{  
+        fn ##fn_name (&mut self, #name: #ty) -> &mut Self {
+            self.#name = Some(#name);
+            self
+        }
+   };
 
-            //TODO -- check to verify field is a Vector -- each doesn't make sense unless the field
-            //is a Vec
- 
-            let output = match a.parse_meta() {
-                Ok(syn::Meta::List(syn::MetaList { path, nested, ..  } ))  => {
-                    if nested.len() != 1 {
-                        panic!("Only one builder option expected");
-                    }
-                    match nested.first() {
-                        Some(syn::NestedMeta::Meta(syn::Meta::NameValue(syn::MetaNameValue {path, eq_token, lit : syn::Lit::Str(ls) } ))) => {
-                            if path.segments[0].ident == "each" {
+    let set_type = SetFunctionConfig::Set_All;
 
-                                // check to see if the name configured for the each attribute is
-                                // the same as the original (which indicates that we can't have
-                                // both since their specified to have the same name, but different
-                                // parameters. Since its not specified in the test description,
-                                // we're goin to assume that the desire is that there is only one
-                                // function and it adds an additional item to the vector
-                                let ls_id =  format_ident!("{}",ls.value());
-                                if name == ls_id {
-                                    eprintln!("Names match need to only output a single function named {}",ls_id);
-                                    // in this case, we want to generate 1 set function.
-                                    // Set function must initialize vec if not already set
-                                    // Init function can still be none
-                                    // could or could not be optional to set   (assume it is for
-                                    // now)  -- note if not optional default should be set to 
+    // check to see if there is a builder attributee
+    if let Some(a) = attrs.iter().find(|a| a.path.segments[0].ident == "builder") {
 
-                                    FieldBuildInfo { optional: true, set_config: SetFunctionConfig::Individual, name, ty }
-                                 }
-                                else {
-                                    eprintln!("Names DONT match output vector function {} and {}",name, ls_id);
-                                    // in this case, we want to generate 2 set function.
-                                    // Init function can still set to None
-                                    // could or could not be optional to set  (
-                                    FieldBuildInfo { optional: true, set_config: SetFunctionConfig::Both,  name, ty } 
-                                 }
-                             }
-                            // Eq for MetaNameValue eq_token is ALWAYS Eq so no need to
-                            // check
-                            
-                            else {
-                                    FieldBuildInfo { optional: true, set_config: SetFunctionConfig::Global,  name, ty } 
+        match a.parse_meta() {
+            Ok(syn::Meta::List(syn::MetaList { path: _, nested, ..  } ))  => {
+                if nested.len() != 1 {
+                    panic!("Only one builder option expected");
+                }
+                match nested.first() {
+                    Some(syn::NestedMeta::Meta(syn::Meta::NameValue(syn::MetaNameValue {path, eq_token: _ , lit : syn::Lit::Str(ls) } ))) => {
+                        if path.segments[0].ident == "each" {
+                            // check to see if source is a vector
+                            if is_vec(&ty).is_none() {
+                                return mk_err(&f.ty);
                             }
-                         }
-                        Some(x) => {
-                            eprintln!("Nested first Got unexpected {:?}",x);
-                                    FieldBuildInfo { optional: true, set_config: SetFunctionConfig::Individual, name, ty }
-                         }
-                        
-                        None => {
-                            eprintln!("None on nested.first");
-                                    FieldBuildInfo { optional: true, set_config: SetFunctionConfig::Individual, name, ty }
-                         }
-                     }
-                },
-                Ok(other) => {
-                    eprintln!("Got something unexpected");
-                                    FieldBuildInfo { optional: true, set_config: SetFunctionConfig::Individual, name, ty }
-                },
-                Err(_) => {
-                    eprintln!("Error on parse_meta");
-                                    FieldBuildInfo { optional: true, set_config: SetFunctionConfig::Individual, name, ty }
-                },
-            };
-            output
-        }
-        else {
-            eprintln!("DEFINE -- for field {:?} NO builder attribute", name);
-            // did not get a builder attribute so 
-            // standard setter as previously defined
-            FieldBuildInfo { optional: true, set_config: SetFunctionConfig::Global,  name, ty } 
-        }
 
-    } 
-    else {
-        FieldBuildInfo { optional: true, set_config: SetFunctionConfig::Global,  name, ty } 
-    };
-    output
+                            let ls_id =  format_ident!("{}",ls.value());
+                            let add_set_function = quote! {
+                                fn #ls_id (&mut self, #ls_id: #ty) -> &mut Self {
+                                    self.#name.push(#ls_id);
+                                    self
+                                }
+                            };
+
+                            // check to see if the name configured for the each attribute is the same as the original (which indicates that we can't have
+                            // both since their specified to have the same name, but different parameters. Since its not specified in the test description,
+                            // we're goin to assume that the desire is that there is only one function and it adds an additional item to the vector
+                            if name == ls_id {
+                                eprintln!("Names match need to only output a single function named {}",ls_id);
+                                // in this case, we want to generate 1 set function. Set function must initialize vec if not already set
+                                // Init function can still be none could or could not be optional to set   (assume it is for
+                                // now)  -- note if not optional default should be set to 
+                                return Some(add_set_function);
+                            }
+                            else {
+                                eprintln!("Names DONT match output vector function {} and {}",name, ls_id);
+                                // in this case, we want to generate 2 set function.
+                                // Init function can still set to None
+                                // could or could not be optional to set  (
+
+                                return Some(quote! {
+                                    #full_set_function
+                                    #add_set_function
+                                });
+                             }
+                         }
+                        // Eq for MetaNameValue eq_token is ALWAYS Eq so no need to check
+                        else {
+                            return mk_err(ty);
+                        }
+                     }
+                    Some(x) => {
+                        eprintln!("Nested first Got unexpected {:?}",x);
+                        return mk_err(x);
+                     }
+                    
+                    None => {
+                        eprintln!("None on nested.first");
+                        return mk_err(a);
+                     }
+                 }
+            },
+            Ok(_other) => {
+                eprintln!("Got something unexpected");
+                return mk_err(f);
+            },
+            Err(_) => {
+                eprintln!("Error on parse_meta");
+                return mk_err(f);
+            },
+        };
+    }
+
+    return Some(full_set_function);
 
 }
 
@@ -162,14 +172,11 @@ pub fn derive(input: TokenStream) -> TokenStream {
     let parsed_input : DeriveInput = syn::parse(input3).unwrap();
     let parsed_copy = parsed_input.clone();
 
-//    eprintln!("Parsed Tree {:#?}",parsed_copy);
-//    eprintln!("Parsed Tree -------- END");
-
-    
     let struct_name = parsed_input.ident;
     let builder_name = format_ident!("{}Builder",struct_name);
 
 
+    // get the list of fields from the structure
     let fields = if let syn::Data::Struct(
         syn::DataStruct {
             fields: syn::Fields::Named(syn::FieldsNamed {
@@ -179,13 +186,13 @@ pub fn derive(input: TokenStream) -> TokenStream {
         }
     ) = parsed_copy.data { named }
     else {
+        // this dervive (builder) only supports structures at this time
         unimplemented!();
     };
 
     // builder structure fields
     let builder_def_fields = fields.iter().map(|f| {
 
-        anaylze_fields(f);
 
         // process each field f
        let name = &f.ident.clone().unwrap();
@@ -284,16 +291,23 @@ pub fn derive(input: TokenStream) -> TokenStream {
     // Builder Methods
     let builder_methods = fields.iter().map(|f|
         {
+           let set_func_fields = analyze_fields(f);
+           eprintln!("set_func_fields {:#?}",set_func_fields);
            let field_name = &f.ident;
            let field_type = match  unwrapped_option_type(&f.ty) {
                Some(updated) => updated,
                None => &f.ty,
             };
+           let msg = format!("// Updated Version");
+           let msg1 = format!("// END -----");
            quote!{  
                 fn #field_name (&mut self, #field_name: #field_type) -> &mut Self {
                     self.#field_name = Some(#field_name);
                     self
                 }
+                #[doc = #msg]
+                #set_func_fields
+                #[doc = #msg1]
            }
        });
 
@@ -324,6 +338,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
             };
            output
        });
+
 
     //
     // OUTPUT
