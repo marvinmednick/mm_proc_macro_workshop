@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::{quote,format_ident};
-use syn::{DeriveInput, PathSegment};
+use syn::{DeriveInput,Path};
 
 fn unwrapped_option_type<'a>(ty : &'a syn::Type) -> Option<&'a syn::Type> {
 
@@ -32,6 +32,129 @@ fn unwrapped_option_type<'a>(ty : &'a syn::Type) -> Option<&'a syn::Type> {
     return None
 }
 
+
+enum SetFunctionConfig {
+    Individual,
+    Global,
+    Both
+}
+
+struct FieldBuildInfo {
+    optional: bool,
+    set_config: SetFunctionConfig,
+    name : syn::Ident,
+    ty: syn::Type,
+
+}
+
+fn is_vec(ty : &syn::Type )  -> bool {
+
+    if let syn::Type::Path( syn::TypePath { qself: _, path: syn::Path { leading_colon :  _, segments } }) = ty {
+        if segments.last().unwrap().ident == "Vec"  && 
+        if let syn::PathArguments::AngleBracketed(..) = segments.last().unwrap().arguments { true } else {false} {
+                return true
+        }
+    } 
+    return false
+
+}
+
+fn anaylze_fields (f: &syn::Field) -> FieldBuildInfo {
+
+    let name = f.ident.clone().unwrap();
+    let ty = match  unwrapped_option_type(&f.ty) {
+       Some(updated) => updated,
+       None => &f.ty,
+    }.clone();
+
+
+    let  output = if let syn::Field {attrs, ..} = f {
+        
+        // check to see if there is a builder attributee
+        if let Some(a) = attrs.iter().find(|a| a.path.segments[0].ident == "builder") {
+            eprintln!("DEFINE -- for field {:?}  found builder attribute", name);
+
+            //TODO -- check to verify field is a Vector -- each doesn't make sense unless the field
+            //is a Vec
+ 
+            let output = match a.parse_meta() {
+                Ok(syn::Meta::List(syn::MetaList { path, nested, ..  } ))  => {
+                    if nested.len() != 1 {
+                        panic!("Only one builder option expected");
+                    }
+                    match nested.first() {
+                        Some(syn::NestedMeta::Meta(syn::Meta::NameValue(syn::MetaNameValue {path, eq_token, lit : syn::Lit::Str(ls) } ))) => {
+                            if path.segments[0].ident == "each" {
+
+                                // check to see if the name configured for the each attribute is
+                                // the same as the original (which indicates that we can't have
+                                // both since their specified to have the same name, but different
+                                // parameters. Since its not specified in the test description,
+                                // we're goin to assume that the desire is that there is only one
+                                // function and it adds an additional item to the vector
+                                let ls_id =  format_ident!("{}",ls.value());
+                                if name == ls_id {
+                                    eprintln!("Names match need to only output a single function named {}",ls_id);
+                                    // in this case, we want to generate 1 set function.
+                                    // Set function must initialize vec if not already set
+                                    // Init function can still be none
+                                    // could or could not be optional to set   (assume it is for
+                                    // now)  -- note if not optional default should be set to 
+
+                                    FieldBuildInfo { optional: true, set_config: SetFunctionConfig::Individual, name, ty }
+                                 }
+                                else {
+                                    eprintln!("Names DONT match output vector function {} and {}",name, ls_id);
+                                    // in this case, we want to generate 2 set function.
+                                    // Init function can still set to None
+                                    // could or could not be optional to set  (
+                                    FieldBuildInfo { optional: true, set_config: SetFunctionConfig::Both,  name, ty } 
+                                 }
+                             }
+                            // Eq for MetaNameValue eq_token is ALWAYS Eq so no need to
+                            // check
+                            
+                            else {
+                                    FieldBuildInfo { optional: true, set_config: SetFunctionConfig::Global,  name, ty } 
+                            }
+                         }
+                        Some(x) => {
+                            eprintln!("Nested first Got unexpected {:?}",x);
+                                    FieldBuildInfo { optional: true, set_config: SetFunctionConfig::Individual, name, ty }
+                         }
+                        
+                        None => {
+                            eprintln!("None on nested.first");
+                                    FieldBuildInfo { optional: true, set_config: SetFunctionConfig::Individual, name, ty }
+                         }
+                     }
+                },
+                Ok(other) => {
+                    eprintln!("Got something unexpected");
+                                    FieldBuildInfo { optional: true, set_config: SetFunctionConfig::Individual, name, ty }
+                },
+                Err(_) => {
+                    eprintln!("Error on parse_meta");
+                                    FieldBuildInfo { optional: true, set_config: SetFunctionConfig::Individual, name, ty }
+                },
+            };
+            output
+        }
+        else {
+            eprintln!("DEFINE -- for field {:?} NO builder attribute", name);
+            // did not get a builder attribute so 
+            // standard setter as previously defined
+            FieldBuildInfo { optional: true, set_config: SetFunctionConfig::Global,  name, ty } 
+        }
+
+    } 
+    else {
+        FieldBuildInfo { optional: true, set_config: SetFunctionConfig::Global,  name, ty } 
+    };
+    output
+
+}
+
 #[proc_macro_derive(Builder, attributes(builder))]
 pub fn derive(input: TokenStream) -> TokenStream {
     let input3 = input.clone();
@@ -61,6 +184,10 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
     // builder structure fields
     let builder_def_fields = fields.iter().map(|f| {
+
+        anaylze_fields(f);
+
+        // process each field f
        let name = &f.ident.clone().unwrap();
        let attr_list = &f.attrs;
 //       eprintln!("NEW Field {:?}  len Attr: {} ATTR: {:#?}",name, attr_list.len(),attr_list);
@@ -87,7 +214,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
                            if nested.len() != 1 {
                                panic!("Only one builder option expected");
                             }
-  //                         eprintln!("Nested first = {:#?}",nested.first().unwrap());
+//                         eprintln!("Nested first = {:#?}",nested.first().unwrap());
                            match nested.first() {
                                Some(syn::NestedMeta::Meta(syn::Meta::NameValue(syn::MetaNameValue {path, eq_token, lit : syn::Lit::Str(ls) } ))) => {
                                    if path.segments[0].ident == "each" {
