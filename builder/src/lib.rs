@@ -81,11 +81,11 @@ fn analyze_fields (f: &syn::Field) -> Option<proc_macro2::TokenStream> {
     let fn_name = format_ident!("alt_{}",name);
 
     let full_set_function = quote!{  
-        fn ##fn_name (&mut self, #name: #ty) -> &mut Self {
+        fn #fn_name (&mut self, #name: #ty) -> &mut Self {
             self.#name = Some(#name);
             self
         }
-   };
+    };
 
 //    let set_type = SetFunctionConfig::Set_All;
 
@@ -121,8 +121,7 @@ fn analyze_fields (f: &syn::Field) -> Option<proc_macro2::TokenStream> {
                                 // in this case, we want to generate 1 set function. Set function must initialize vec if not already set
                                 // Init function can still be none could or could not be optional to set   (assume it is for
                                 // now)  -- note if not optional default should be set to 
-//                                return Some(full_set_function);
-                                return Some(quote! {});
+                                return Some(add_set_function);
                             }
                             else {
                                 eprintln!("analyze:  Names DONT match output vector function {} and {}",name, ls_id);
@@ -132,7 +131,7 @@ fn analyze_fields (f: &syn::Field) -> Option<proc_macro2::TokenStream> {
 
                                 return Some(quote! {
                                     #full_set_function
-                                    #full_set_function
+                                    #add_set_function
                                 });
                              }
                          }
@@ -294,12 +293,14 @@ pub fn derive(input: TokenStream) -> TokenStream {
     let builder_methods = fields.iter().map(|f|
         {
            let set_func_fields =  analyze_fields(f).unwrap();
+
            //eprintl!n("set_func_fields {:#?}",set_func_fields);
            let field_name = &f.ident;
            let field_type = match  unwrapped_option_type(&f.ty) {
                Some(updated) => updated,
                None => &f.ty,
             };
+
            let msg = format!("// Updated Version");
            let msg1 = format!("// END -----");
            quote!{  
