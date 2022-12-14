@@ -197,40 +197,29 @@ pub fn derive(input: TokenStream) -> TokenStream {
     // builder structure fields
     let builder_def_fields = fields.iter().map(|f| {
 
-
         // process each field f
        let name = &f.ident.clone().unwrap();
-       let attr_list = &f.attrs;
-//       eprintln!("NEW Field {:?}  len Attr: {} ATTR: {:#?}",name, attr_list.len(),attr_list);
+//       let attr_list = &f.attrs;
        let ty = match  unwrapped_option_type(&f.ty) {
            Some(updated) => updated,
            None => &f.ty,
         };
 
+/*
 
        for a in &f.attrs {
            let path = &a.path;
-           let tokens = &a.tokens;
            if path.segments.len() > 0 && path.segments[0].ident == "builder" {
-                   eprintln!("FOUND a builder attribute");
-   //                eprintln!("tokens {:?}",tokens);
                    let parsed = a.parse_meta();
-   //                eprintln!("Parsed {:#?}",parsed);
 
-                   let meta = match parsed {
-                       Ok(syn::Meta::List(syn::MetaList { path, nested, ..  } ))  => {
-//                           eprintln!("path  {:#?}",path);
- //                          eprintln!("path ident {:?}",path.segments[0].ident);
-  //                         eprintln!("path  nested {:#?}",nested);
+                   match parsed {
+                       Ok(syn::Meta::List(syn::MetaList { path: _, nested, ..  } ))  => {
                            if nested.len() != 1 {
                                panic!("Only one builder option expected");
                             }
-//                         eprintln!("Nested first = {:#?}",nested.first().unwrap());
                            match nested.first() {
-                               Some(syn::NestedMeta::Meta(syn::Meta::NameValue(syn::MetaNameValue {path, eq_token, lit : syn::Lit::Str(ls) } ))) => {
+                               Some(syn::NestedMeta::Meta(syn::Meta::NameValue(syn::MetaNameValue {path, eq_token: _, lit : syn::Lit::Str(ls) } ))) => {
                                    if path.segments[0].ident == "each" {
-                                       eprintln!("Found Each");
-                                       eprintln!("Nested First ls {:?}",ls);
                                        let ls_id =  format_ident!("{}",ls.value());
                                        if name == &ls_id {
                                            eprintln!("Names match need to only output a single function named {}",ls_id);
@@ -242,24 +231,6 @@ pub fn derive(input: TokenStream) -> TokenStream {
                                    // Eq for MetaNameValue eq_token is ALWAYS Eq so no need to
                                    // check
                                    
-/*
-                                   if let syn::Lit::Str (ls) = lit {
-
-                                        let lp = ls.value();
-//                                       eprintln!("Nested First lit {:?}",lit);
-                                       eprintln!("Nested First ls {:?}",ls);
-                                       eprintln!(" lit parse {:#?}",lp);
-                                       let l_id =  format_ident!("{}",lp);
-                                       eprintln!(" lit parse {:#?} {}",lp,l_id);
-                                       // at this point there are two options
-                                       // if the each version name is the same as field name,
-                                       // output only the individual one
-                                       // if the each version name is different output both the
-                                       // originand the each version
-//                                       let indiv_method = syn::Ident::new(l_id,ls.span())
-
-                                   }
-*/
 
                                 }
                                Some(x) => {
@@ -281,6 +252,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
             }
        }
        
+       */
 
         quote!{  #name: std::option::Option<#ty> }
     });
