@@ -32,7 +32,7 @@ fn unwrapped_option_type<'a>(ty : &'a syn::Type) -> Option<&'a syn::Type> {
     return None
 }
 
-
+/*
 enum SetFunctionConfig {
     Set_Individual,
     Set_All,
@@ -45,6 +45,7 @@ struct FieldBuildInfo {
     ty: syn::Type,
 
 }
+*/
 
 fn is_vec(ty : &syn::Type )  -> Option<&syn::Type> {
 
@@ -86,7 +87,7 @@ fn analyze_fields (f: &syn::Field) -> Option<proc_macro2::TokenStream> {
         }
    };
 
-    let set_type = SetFunctionConfig::Set_All;
+//    let set_type = SetFunctionConfig::Set_All;
 
     // check to see if there is a builder attributee
     if let Some(a) = attrs.iter().find(|a| a.path.segments[0].ident == "builder") {
@@ -116,21 +117,22 @@ fn analyze_fields (f: &syn::Field) -> Option<proc_macro2::TokenStream> {
                             // both since their specified to have the same name, but different parameters. Since its not specified in the test description,
                             // we're goin to assume that the desire is that there is only one function and it adds an additional item to the vector
                             if name == ls_id {
-                                eprintln!("Names match need to only output a single function named {}",ls_id);
+                                eprintln!("analyze:  Names match need to only output a single function named {}",ls_id);
                                 // in this case, we want to generate 1 set function. Set function must initialize vec if not already set
                                 // Init function can still be none could or could not be optional to set   (assume it is for
                                 // now)  -- note if not optional default should be set to 
-                                return Some(add_set_function);
+//                                return Some(full_set_function);
+                                return Some(quote! {});
                             }
                             else {
-                                eprintln!("Names DONT match output vector function {} and {}",name, ls_id);
+                                eprintln!("analyze:  Names DONT match output vector function {} and {}",name, ls_id);
                                 // in this case, we want to generate 2 set function.
                                 // Init function can still set to None
                                 // could or could not be optional to set  (
 
                                 return Some(quote! {
                                     #full_set_function
-                                    #add_set_function
+                                    #full_set_function
                                 });
                              }
                          }
@@ -291,8 +293,8 @@ pub fn derive(input: TokenStream) -> TokenStream {
     // Builder Methods
     let builder_methods = fields.iter().map(|f|
         {
-           let set_func_fields = analyze_fields(f);
-           eprintln!("set_func_fields {:#?}",set_func_fields);
+           let set_func_fields =  analyze_fields(f).unwrap();
+           //eprintl!n("set_func_fields {:#?}",set_func_fields);
            let field_name = &f.ident;
            let field_type = match  unwrapped_option_type(&f.ty) {
                Some(updated) => updated,
