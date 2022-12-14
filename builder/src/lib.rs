@@ -78,10 +78,10 @@ fn analyze_fields (f: &syn::Field) -> Option<proc_macro2::TokenStream> {
        None => &f.ty,
     }.clone();
 
-    let fn_name = format_ident!("alt_{}",name);
+//    let fn_name = format_ident!("alt_{}",name);
 
     let full_set_function = quote!{  
-        fn #fn_name (&mut self, #name: #ty) -> &mut Self {
+        fn #name (&mut self, #name: #ty) -> &mut Self {
             self.#name = Some(#name);
             self
         }
@@ -101,13 +101,16 @@ fn analyze_fields (f: &syn::Field) -> Option<proc_macro2::TokenStream> {
                     Some(syn::NestedMeta::Meta(syn::Meta::NameValue(syn::MetaNameValue {path, eq_token: _ , lit : syn::Lit::Str(ls) } ))) => {
                         if path.segments[0].ident == "each" {
                             // check to see if source is a vector
-                            if is_vec(&ty).is_none() {
-                                return mk_err(&f.ty);
-                            }
+
+                            let inner_ty = match is_vec(&ty) {
+                                Some(ty) => ty,
+                                None => return mk_err(&f.ty),
+                            };
+
 
                             let ls_id =  format_ident!("{}",ls.value());
                             let add_set_function = quote! {
-                                fn #ls_id (&mut self, #ls_id: #ty) -> &mut Self {
+                                fn #ls_id (&mut self, #ls_id: #inner_ty) -> &mut Self {
                                     self.#name.push(#ls_id);
                                     self
                                 }
@@ -304,13 +307,13 @@ pub fn derive(input: TokenStream) -> TokenStream {
            let msg = format!("// Updated Version");
            let msg1 = format!("// END -----");
            quote!{  
-                fn #field_name (&mut self, #field_name: #field_type) -> &mut Self {
-                    self.#field_name = Some(#field_name);
-                    self
-                }
-                #[doc = #msg]
+//                fn #field_name (&mut self, #field_name: #field_type) -> &mut Self {
+ ////                   self.#field_name = Some(#field_name);
+  //                  self
+   //             }
+    //            #[doc = #msg]
                 #set_func_fields
-                #[doc = #msg1]
+     //           #[doc = #msg1]
            }
        });
 
