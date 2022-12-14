@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::{quote,format_ident};
-use syn::{DeriveInput,Path};
+use syn::DeriveInput;
 
 fn unwrapped_option_type<'a>(ty : &'a syn::Type) -> Option<&'a syn::Type> {
 
@@ -63,7 +63,18 @@ fn is_vec(ty : &syn::Type )  -> Option<&syn::Type> {
     return None;
 }
 
-fn analyze_fields (f: &syn::Field) -> Option<proc_macro2::TokenStream> {
+#[derive(Debug)]
+struct FieldBuilderMetadata {
+    name:  syn::Ident,
+    ty: syn::Type,
+    optional: bool,
+    inner_type:  syn::Type,
+    set_each_code:  Option<proc_macro2::TokenStream>,
+    set_all_code: Option<proc_macro2::TokenStream>,
+    error:  Option<proc_macro2::TokenStream>,
+}
+
+fn analyze_fields (f: &syn::Field) -> Option<FieldBuilderMetadata> {
 
     fn mk_err<T: quote::ToTokens>(t: T) -> Option<proc_macro2::TokenStream> {
         Some(
@@ -71,14 +82,23 @@ fn analyze_fields (f: &syn::Field) -> Option<proc_macro2::TokenStream> {
         )
     }
 
+
     let name = f.ident.clone().unwrap();
     let attrs = &f.attrs;
-    let ty = match  unwrapped_option_type(&f.ty) {
-       Some(updated) => updated,
-       None => &f.ty,
+    let (ty, optional) = match  unwrapped_option_type(&f.ty) {
+       Some(updated) => (updated, true),
+       None => (&f.ty, false),
     }.clone();
 
-//    let fn_name = format_ident!("alt_{}",name);
+    let mut  field_info = FieldBuilderMetadata {
+        name: name.clone(),
+        ty:  f.ty.clone(),
+        optional,
+        inner_type: ty.clone(),
+        set_each_code: None,
+        set_all_code: None,
+        error: None,
+    };
 
     let full_set_function = quote!{  
         fn #name (&mut self, #name: #ty) -> &mut Self {
@@ -102,7 +122,10 @@ fn analyze_fields (f: &syn::Field) -> Option<proc_macro2::TokenStream> {
 
                             let inner_ty = match is_vec(&ty) {
                                 Some(ty) => ty,
-                                None => return mk_err(&f.ty),
+                                None => {
+                                    field_info.error = mk_err(&f.ty);
+                                    return Some(field_info);
+                                }
                             };
 
 
@@ -122,7 +145,8 @@ fn analyze_fields (f: &syn::Field) -> Option<proc_macro2::TokenStream> {
                                 // in this case, we want to generate 1 set function. Set function must initialize vec if not already set
                                 // Init function can still be none could or could not be optional to set   (assume it is for
                                 // now)  -- note if not optional default should be set to 
-                                return Some(add_set_function);
+                                field_info.set_each_code = Some(add_set_function);
+                                return Some(field_info);
                             }
                             else {
                                 eprintln!("analyze:  Names DONT match output vector function {} and {}",name, ls_id);
@@ -130,40 +154,45 @@ fn analyze_fields (f: &syn::Field) -> Option<proc_macro2::TokenStream> {
                                 // Init function can still set to None
                                 // could or could not be optional to set  (
 
-                                return Some(quote! {
-                                    #full_set_function
-                                    #add_set_function
-                                });
+                                field_info.set_each_code = Some(add_set_function);
+                                field_info.set_all_code = Some(full_set_function);
+                                return Some(field_info);
+
                              }
                          }
                         // Eq for MetaNameValue eq_token is ALWAYS Eq so no need to check
                         else {
-                            return mk_err(ty);
+                            field_info.error = mk_err(&f.ty);
+                            return Some(field_info);
                         }
                      }
                     Some(x) => {
                         eprintln!("Nested first Got unexpected {:?}",x);
-                        return mk_err(x);
+                        field_info.error = mk_err(&f.ty);
+                        return Some(field_info);
                      }
                     
                     None => {
                         eprintln!("None on nested.first");
-                        return mk_err(a);
+                        field_info.error = mk_err(&f.ty);
+                        return Some(field_info);
                      }
                  }
             },
             Ok(_other) => {
                 eprintln!("Got something unexpected");
-                return mk_err(f);
+                field_info.error = mk_err(&f.ty);
+                return Some(field_info);
             },
             Err(_) => {
                 eprintln!("Error on parse_meta");
-                return mk_err(f);
+                field_info.error = mk_err(&f.ty);
+                return Some(field_info);
             },
         };
     }
 
-    return Some(full_set_function);
+    return Some(field_info);
 
 }
 
@@ -192,6 +221,27 @@ pub fn derive(input: TokenStream) -> TokenStream {
         unimplemented!();
     };
 
+    let field_metadata : Vec<FieldBuilderMetadata>= fields.iter().map(|f| analyze_fields(f).unwrap()).collect();
+
+
+    let mut builder_definition = Vec::<proc_macro2::TokenStream>::new();
+    for f in &field_metadata {
+        let name = &f.name;
+
+        let inner_type = &f.inner_type;
+        if f.optional {
+            builder_definition.push(quote! { #name : std::option::Option<#inner_type> });
+        }
+        else {
+            builder_definition.push(quote! { #name : #inner_type });
+        }
+    };
+
+
+    for d in &field_metadata {
+        eprintln!("Def :  {:#?}",d.inner_type);
+    }
+
     //////////////////////////////////////////////////////////
     // builder structure fields
     let builder_def_fields = fields.iter().map(|f| {
@@ -218,7 +268,6 @@ pub fn derive(input: TokenStream) -> TokenStream {
     // Builder Methods
     let builder_methods = fields.iter().map(|f|
         {
-           let set_func_fields =  analyze_fields(f).unwrap();
 
            let field_name = &f.ident;
            let field_type = match  unwrapped_option_type(&f.ty) {
@@ -227,7 +276,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
             };
 
            quote!{  
-                #set_func_fields
+//                #set_func_fields
            }
        });
 
@@ -267,7 +316,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
     // OUTPUT
     let output : proc_macro::TokenStream = quote!( 
          pub struct #builder_name {
-            #(#builder_def_fields,)*
+            #(#builder_definition,)*
          }
          
         impl #struct_name { 
