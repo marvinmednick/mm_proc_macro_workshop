@@ -223,7 +223,18 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
     let field_metadata : Vec<FieldBuilderMetadata>= fields.iter().map(|f| analyze_fields(f).unwrap()).collect();
 
+    let builder_definition_data : Vec<_> = field_metadata.iter().map(|f| (f.optional.clone(),f.name.clone(), f.inner_type.clone())).collect();
 
+    let builder_definition : Vec<_> = builder_definition_data.iter().map(|(optional,name,inner_type) |  {
+        if *optional {
+            quote! { #name : std::option::Option<#inner_type> }
+        }
+        else {
+            quote! { #name : #inner_type }
+        }
+    }).collect();
+
+    /*
     let mut builder_definition = Vec::<proc_macro2::TokenStream>::new();
     for f in &field_metadata {
         let name = &f.name;
@@ -236,7 +247,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
             builder_definition.push(quote! { #name : #inner_type });
         }
     };
-
+ */
 
     for d in &field_metadata {
         eprintln!("Def :  {:#?}",d.inner_type);
