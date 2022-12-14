@@ -194,69 +194,21 @@ pub fn derive(input: TokenStream) -> TokenStream {
         unimplemented!();
     };
 
+    //////////////////////////////////////////////////////////
     // builder structure fields
     let builder_def_fields = fields.iter().map(|f| {
 
         // process each field f
        let name = &f.ident.clone().unwrap();
-//       let attr_list = &f.attrs;
        let ty = match  unwrapped_option_type(&f.ty) {
            Some(updated) => updated,
            None => &f.ty,
         };
 
-/*
-
-       for a in &f.attrs {
-           let path = &a.path;
-           if path.segments.len() > 0 && path.segments[0].ident == "builder" {
-                   let parsed = a.parse_meta();
-
-                   match parsed {
-                       Ok(syn::Meta::List(syn::MetaList { path: _, nested, ..  } ))  => {
-                           if nested.len() != 1 {
-                               panic!("Only one builder option expected");
-                            }
-                           match nested.first() {
-                               Some(syn::NestedMeta::Meta(syn::Meta::NameValue(syn::MetaNameValue {path, eq_token: _, lit : syn::Lit::Str(ls) } ))) => {
-                                   if path.segments[0].ident == "each" {
-                                       let ls_id =  format_ident!("{}",ls.value());
-                                       if name == &ls_id {
-                                           eprintln!("Names match need to only output a single function named {}",ls_id);
-                                        }
-                                       else {
-                                           eprintln!("Names DONT match output vector function {} and {}",name, ls_id);
-                                        }
-                                    }
-                                   // Eq for MetaNameValue eq_token is ALWAYS Eq so no need to
-                                   // check
-                                   
-
-                                }
-                               Some(x) => {
-                                   eprintln!("Nested first Got unexpected {:?}",x);
-                                }
-                               
-                               None => {
-                                   eprintln!("None on nested.first");
-                                }
-                            }
-                       },
-                       Ok(other) => {
-                           eprintln!("Got something unexpected");
-                       },
-                       Err(_) => {
-                           eprintln!("Error on parse_meta");
-                       },
-                   };
-            }
-       }
-       
-       */
-
         quote!{  #name: std::option::Option<#ty> }
     });
 
+    //////////////////////////////////////////////////////////
     // Builder default values
     let builder_init_fields = fields.iter().map(|f|
         {
@@ -264,32 +216,26 @@ pub fn derive(input: TokenStream) -> TokenStream {
            quote!{  #name: None } 
        });
 
+    //////////////////////////////////////////////////////////
     // Builder Methods
     let builder_methods = fields.iter().map(|f|
         {
            let set_func_fields =  analyze_fields(f).unwrap();
 
-           //eprintl!n("set_func_fields {:#?}",set_func_fields);
            let field_name = &f.ident;
            let field_type = match  unwrapped_option_type(&f.ty) {
                Some(updated) => updated,
                None => &f.ty,
             };
 
-           let msg = format!("// Updated Version");
-           let msg1 = format!("// END -----");
            quote!{  
-//                fn #field_name (&mut self, #field_name: #field_type) -> &mut Self {
- ////                   self.#field_name = Some(#field_name);
-  //                  self
-   //             }
-    //            #[doc = #msg]
                 #set_func_fields
-     //           #[doc = #msg1]
            }
        });
 
 
+    //////////////////////////////////////////////////////////
+    // unset field checks Methods
     let unset_fields = fields.iter().map(|f| {
        let field_name = &f.ident;
        let required_set = match  unwrapped_option_type(&f.ty) {
@@ -306,6 +252,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
         }
     });
 
+    //////////////////////////////////////////////////////////
     // Output of build fields
     let output_fields = fields.iter().map(|f|
         {
