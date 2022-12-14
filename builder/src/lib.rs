@@ -87,8 +87,6 @@ fn analyze_fields (f: &syn::Field) -> Option<proc_macro2::TokenStream> {
         }
     };
 
-//    let set_type = SetFunctionConfig::Set_All;
-
     // check to see if there is a builder attributee
     if let Some(a) = attrs.iter().find(|a| a.path.segments[0].ident == "builder") {
 
