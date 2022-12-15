@@ -53,7 +53,7 @@ fn is_vec(ty : &syn::Type )  -> Option<&syn::Type> {
         if segments.last().unwrap().ident == "Vec"  {
             if let syn::PathArguments::AngleBracketed( syn::AngleBracketedGenericArguments { colon2_token: _ , lt_token: _, args, ..}) = &segments.last().unwrap().arguments { 
                     if let  syn::GenericArgument::Type(inner_type) = args.last().unwrap() {
-                        eprintln!("vec type is {:#?}",inner_type);
+                        //eprintln!("vec type is {:#?}",inner_type);
                         return Some(inner_type);
                     }
                 
@@ -69,8 +69,7 @@ struct FieldBuilderMetadata {
     ty: syn::Type,
     optional: bool,
     inner_type:  syn::Type,
-    set_each_code:  Option<proc_macro2::TokenStream>,
-    set_all_code: Option<proc_macro2::TokenStream>,
+    set_field_code: Option<proc_macro2::TokenStream>,
     error:  Option<proc_macro2::TokenStream>,
 }
 
@@ -95,8 +94,7 @@ fn analyze_fields (f: &syn::Field) -> Option<FieldBuilderMetadata> {
         ty:  f.ty.clone(),
         optional,
         inner_type: ty.clone(),
-        set_each_code: None,
-        set_all_code: None,
+        set_field_code: None,
         error: None,
     };
 
@@ -141,21 +139,23 @@ fn analyze_fields (f: &syn::Field) -> Option<FieldBuilderMetadata> {
                             // both since their specified to have the same name, but different parameters. Since its not specified in the test description,
                             // we're goin to assume that the desire is that there is only one function and it adds an additional item to the vector
                             if name == ls_id {
-                                eprintln!("analyze:  Names match need to only output a single function named {}",ls_id);
+                           //     eprintln!("analyze:  Names match need to only output a single function named {}",ls_id);
                                 // in this case, we want to generate 1 set function. Set function must initialize vec if not already set
                                 // Init function can still be none could or could not be optional to set   (assume it is for
                                 // now)  -- note if not optional default should be set to 
-                                field_info.set_each_code = Some(add_set_function);
+                                field_info.set_field_code = Some(add_set_function);
                                 return Some(field_info);
                             }
                             else {
-                                eprintln!("analyze:  Names DONT match output vector function {} and {}",name, ls_id);
+                           //     eprintln!("analyze:  Names DONT match output vector function {} and {}",name, ls_id);
                                 // in this case, we want to generate 2 set function.
                                 // Init function can still set to None
                                 // could or could not be optional to set  (
 
-                                field_info.set_each_code = Some(add_set_function);
-                                field_info.set_all_code = Some(full_set_function);
+                                field_info.set_field_code = Some(quote! {
+                                        #add_set_function
+                                        #full_set_function
+                                });
                                 return Some(field_info);
 
                              }
@@ -192,6 +192,7 @@ fn analyze_fields (f: &syn::Field) -> Option<FieldBuilderMetadata> {
         };
     }
 
+    field_info.set_field_code = Some(full_set_function);
     return Some(field_info);
 
 }
@@ -223,7 +224,10 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
     let field_metadata : Vec<FieldBuilderMetadata>= fields.iter().map(|f| analyze_fields(f).unwrap()).collect();
 
-    let builder_definition_data : Vec<_> = field_metadata.iter().map(|f| (f.optional.clone(),f.name.clone(), f.inner_type.clone())).collect();
+    //////////////////////////////////////////////////////////
+    // builder structure fields
+    let builder_definition_data : Vec<_> = field_metadata.iter().map(|f| 
+        (f.optional.clone(),f.name.clone(),f.inner_type.clone())).collect();
 
     let builder_definition : Vec<_> = builder_definition_data.iter().map(|(optional,name,inner_type) |  {
         if *optional {
@@ -249,12 +253,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
     };
  */
 
-    for d in &field_metadata {
-        eprintln!("Def :  {:#?}",d.inner_type);
-    }
-
-    //////////////////////////////////////////////////////////
-    // builder structure fields
+/*
     let builder_def_fields = fields.iter().map(|f| {
 
         // process each field f
@@ -266,30 +265,26 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
         quote!{  #name: std::option::Option<#ty> }
     });
+*/
 
     //////////////////////////////////////////////////////////
     // Builder default values
-    let builder_init_fields = fields.iter().map(|f|
+    let names : Vec<_> = field_metadata.iter().map(|f| f.name.clone()).collect();
+
+    let builder_init_fields = names.iter().map(|name|
         {
-           let name = &f.ident;
            quote!{  #name: None } 
        });
 
     //////////////////////////////////////////////////////////
     // Builder Methods
-    let builder_methods = fields.iter().map(|f|
-        {
+    let set_field_funcs : Vec<_> = field_metadata.iter().map(|f| f.set_field_code.clone()).collect();
 
-           let field_name = &f.ident;
-           let field_type = match  unwrapped_option_type(&f.ty) {
-               Some(updated) => updated,
-               None => &f.ty,
-            };
-
-           quote!{  
-//                #set_func_fields
+    let builder_methods : Vec<_> = set_field_funcs.iter().map(|set_func| 
+         quote!{  
+                #set_func
            }
-       });
+       ).collect();
 
 
     //////////////////////////////////////////////////////////
