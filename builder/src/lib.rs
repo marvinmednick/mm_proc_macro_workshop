@@ -149,6 +149,7 @@ fn analyze_fields (f: &syn::Field) -> Option<FieldBuilderMetadata> {
                          }
                         // Eq for MetaNameValue eq_token is ALWAYS Eq so no need to check
                         else {
+                            eprintln!("Unknown builder attribute {})",path.segments[0].ident);
                             field_info.error = mk_err(&f.ty);
                             return Some(field_info);
                         }
