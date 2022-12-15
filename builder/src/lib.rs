@@ -52,7 +52,6 @@ fn is_vec(ty : &syn::Type )  -> Option<&syn::Type> {
 
 struct FieldBuilderMetadata {
     name:  syn::Ident,
-    ty: syn::Type,
     optional: bool,
     inner_type:  syn::Type,
     set_field_code: Option<proc_macro2::TokenStream>,
@@ -78,7 +77,6 @@ fn analyze_fields (f: &syn::Field) -> Option<FieldBuilderMetadata> {
 
     let mut  field_info = FieldBuilderMetadata {
         name: name.clone(),
-        ty:  f.ty.clone(),
         optional,
         inner_type: ty.clone(),
         set_field_code: None,
@@ -234,34 +232,6 @@ pub fn derive(input: TokenStream) -> TokenStream {
         }
     }).collect();
 
-    /*
-    let mut builder_definition = Vec::<proc_macro2::TokenStream>::new();
-    for f in &field_metadata {
-        let name = &f.name;
-
-        let inner_type = &f.inner_type;
-        if f.optional {
-            builder_definition.push(quote! { #name : std::option::Option<#inner_type> });
-        }
-        else {
-            builder_definition.push(quote! { #name : #inner_type });
-        }
-    };
- */
-
-/*
-    let builder_def_fields = fields.iter().map(|f| {
-
-        // process each field f
-       let name = &f.ident.clone().unwrap();
-       let ty = match  unwrapped_option_type(&f.ty) {
-           Some(updated) => updated,
-           None => &f.ty,
-        };
-
-        quote!{  #name: std::option::Option<#ty> }
-    });
-*/
 
     //////////////////////////////////////////////////////////
     // Builder default values
@@ -290,50 +260,26 @@ pub fn derive(input: TokenStream) -> TokenStream {
     // unset field checks Methods
     let optional : Vec<_> = field_metadata.iter().map(|f| (f.name.clone(),f.optional.clone(),f.can_set_each.clone())).collect();
 
-    let unset_fields = optional.iter().map(|(name, is_optional, can_set_each)| {
-        if ! is_optional {
-            if *can_set_each {
-               quote! {
-                   if self.#name.len() == 0 {
-                       Some(std::stringify!(#name).to_string())
-                   }
-                   else {
-                        None
-                   }
-                }
-            }
-            else {
-               quote! {
-                   if self.#name == None {
-                       Some(std::stringify!(#name).to_string())
-                   }
-                   else {
-                        None
-                   }
-                }
+    let unset_fields = optional.iter().map(|(name, is_optional, can_set_each)| 
+        if  *is_optional || *can_set_each {
+            quote! { 
+                None
             }
         } 
         else {
-            quote! { 
-                None
-            } 
-
+           quote! {
+               if self.#name == None {
+                   Some(std::stringify!(#name).to_string())
+               }
+               else {
+                    None
+               }
+            }
         }
-    });
+    );
 
     //////////////////////////////////////////////////////////
     // Output of build fields
-/*
-    let output_fields = fields.iter().map(|f|
-        {
-           let field_name = &f.ident;
-           let output = match  unwrapped_option_type(&f.ty) {
-               Some(_) => quote! { #field_name : self.#field_name.clone() },
-               None =>    quote! { #field_name : self.#field_name.clone().unwrap() },
-            };
-           output
-       });
-*/
 
     let output_fields : Vec <_> = optional.iter().map(|(name,is_optional,can_set_each)| 
         if ! is_optional {
