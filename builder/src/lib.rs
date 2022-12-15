@@ -289,19 +289,24 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
     //////////////////////////////////////////////////////////
     // unset field checks Methods
-    let unset_fields = fields.iter().map(|f| {
-       let field_name = &f.ident;
-       let required_set = match  unwrapped_option_type(&f.ty) {
-           Some(_) => false,
-           None => true,
-        };
-       quote! {
-           if #required_set && self.#field_name == None {
-               Some(std::stringify!(#field_name).to_string())
-           }
-           else {
-            None
+    let optional : Vec<_> = field_metadata.iter().map(|f| (f.name.clone(),f.optional.clone())).collect();
+
+    let unset_fields = optional.iter().map(|(name, is_optional)| {
+        if ! is_optional {
+           quote! {
+               if self.#name == None {
+                   Some(std::stringify!(#name).to_string())
+               }
+               else {
+                    None
+               }
             }
+        } 
+        else {
+            quote! { 
+                None
+            } 
+
         }
     });
 
