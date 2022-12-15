@@ -32,20 +32,7 @@ fn unwrapped_option_type<'a>(ty : &'a syn::Type) -> Option<&'a syn::Type> {
     return None
 }
 
-/*
-enum SetFunctionConfig {
-    Set_Individual,
-    Set_All,
-    Both
-}
 
-struct FieldBuildInfo {
-    set_config: SetFunctionConfig,
-    name : syn::Ident,
-    ty: syn::Type,
-
-}
-*/
 
 fn is_vec(ty : &syn::Type )  -> Option<&syn::Type> {
 
@@ -63,13 +50,13 @@ fn is_vec(ty : &syn::Type )  -> Option<&syn::Type> {
     return None;
 }
 
-#[derive(Debug)]
 struct FieldBuilderMetadata {
     name:  syn::Ident,
     ty: syn::Type,
     optional: bool,
     inner_type:  syn::Type,
     set_field_code: Option<proc_macro2::TokenStream>,
+    can_set_each: bool,
     error:  Option<proc_macro2::TokenStream>,
 }
 
@@ -95,14 +82,8 @@ fn analyze_fields (f: &syn::Field) -> Option<FieldBuilderMetadata> {
         optional,
         inner_type: ty.clone(),
         set_field_code: None,
+        can_set_each: false,
         error: None,
-    };
-
-    let full_set_function = quote!{  
-        fn #name (&mut self, #name: #ty) -> &mut Self {
-            self.#name = Some(#name);
-            self
-        }
     };
 
     // check to see if there is a builder attributee
@@ -134,6 +115,14 @@ fn analyze_fields (f: &syn::Field) -> Option<FieldBuilderMetadata> {
                                     self
                                 }
                             };
+                            let full_set_function = quote!{  
+                                fn #name (&mut self, #name: #ty) -> &mut Self {
+                                    self.#name = #name;
+                                    self
+                                }
+                            };
+
+                            field_info.can_set_each = true;
 
                             // check to see if the name configured for the each attribute is the same as the original (which indicates that we can't have
                             // both since their specified to have the same name, but different parameters. Since its not specified in the test description,
@@ -192,6 +181,13 @@ fn analyze_fields (f: &syn::Field) -> Option<FieldBuilderMetadata> {
         };
     }
 
+    let full_set_function = quote!{  
+        fn #name (&mut self, #name: #ty) -> &mut Self {
+            self.#name = Some(#name);
+            self
+        }
+    };
+
     field_info.set_field_code = Some(full_set_function);
     return Some(field_info);
 
@@ -227,14 +223,14 @@ pub fn derive(input: TokenStream) -> TokenStream {
     //////////////////////////////////////////////////////////
     // builder structure fields
     let builder_definition_data : Vec<_> = field_metadata.iter().map(|f| 
-        (f.optional.clone(),f.name.clone(),f.inner_type.clone())).collect();
+        (f.name.clone(),f.inner_type.clone(),f.can_set_each.clone())).collect();
 
-    let builder_definition : Vec<_> = builder_definition_data.iter().map(|(optional,name,inner_type) |  {
-        if *optional {
-            quote! { #name : std::option::Option<#inner_type> }
-        }
+    let builder_definition : Vec<_> = builder_definition_data.iter().map(|(name,inner_type,can_set_each) |  {
+        if *can_set_each {
+                quote! { #name : #inner_type }
+        } 
         else {
-            quote! { #name : #inner_type }
+            quote! { #name : std::option::Option<#inner_type> }
         }
     }).collect();
 
@@ -269,10 +265,13 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
     //////////////////////////////////////////////////////////
     // Builder default values
-    let names : Vec<_> = field_metadata.iter().map(|f| f.name.clone()).collect();
+    let names : Vec<_> = field_metadata.iter().map(|f| (f.name.clone(), f.can_set_each)).collect();
 
-    let builder_init_fields = names.iter().map(|name|
-        {
+    let builder_init_fields = names.iter().map(|(name, can_set_each)|
+        if *can_set_each {
+           quote!{  #name: vec![] } 
+        }
+        else {
            quote!{  #name: None } 
        });
 
@@ -289,17 +288,29 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
     //////////////////////////////////////////////////////////
     // unset field checks Methods
-    let optional : Vec<_> = field_metadata.iter().map(|f| (f.name.clone(),f.optional.clone())).collect();
+    let optional : Vec<_> = field_metadata.iter().map(|f| (f.name.clone(),f.optional.clone(),f.can_set_each.clone())).collect();
 
-    let unset_fields = optional.iter().map(|(name, is_optional)| {
+    let unset_fields = optional.iter().map(|(name, is_optional, can_set_each)| {
         if ! is_optional {
-           quote! {
-               if self.#name == None {
-                   Some(std::stringify!(#name).to_string())
-               }
-               else {
-                    None
-               }
+            if *can_set_each {
+               quote! {
+                   if self.#name.len() == 0 {
+                       Some(std::stringify!(#name).to_string())
+                   }
+                   else {
+                        None
+                   }
+                }
+            }
+            else {
+               quote! {
+                   if self.#name == None {
+                       Some(std::stringify!(#name).to_string())
+                   }
+                   else {
+                        None
+                   }
+                }
             }
         } 
         else {
@@ -312,6 +323,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
     //////////////////////////////////////////////////////////
     // Output of build fields
+/*
     let output_fields = fields.iter().map(|f|
         {
            let field_name = &f.ident;
@@ -321,6 +333,22 @@ pub fn derive(input: TokenStream) -> TokenStream {
             };
            output
        });
+*/
+
+    let output_fields : Vec <_> = optional.iter().map(|(name,is_optional,can_set_each)| 
+        if ! is_optional {
+            if *can_set_each {
+                // Not setup as Optional -- empty fields will be an empty vec not as None
+               quote! { #name : self.#name.clone() }
+            }
+            else {
+               quote! { #name : self.#name.clone().unwrap() }
+            }
+        }
+        else {
+               quote! { #name : self.#name.clone() }
+        }
+    ).collect();
 
 
     //
@@ -349,7 +377,6 @@ pub fn derive(input: TokenStream) -> TokenStream {
                 if missing.len() == 0 {
                     let x = #struct_name {
                         #(#output_fields),* ,
-//                       #(#my_field_name:    #my_field_value ,)*
                     };
 
                     Ok(x)
