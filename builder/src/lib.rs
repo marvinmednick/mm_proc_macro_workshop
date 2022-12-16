@@ -56,7 +56,6 @@ struct FieldBuilderMetadata {
     inner_type:  syn::Type,
     set_field_code: Option<proc_macro2::TokenStream>,
     can_set_each: bool,
-    error:  Option<proc_macro2::TokenStream>,
 }
 
 fn analyze_fields (f: &syn::Field) -> Option<FieldBuilderMetadata> {
@@ -81,14 +80,15 @@ fn analyze_fields (f: &syn::Field) -> Option<FieldBuilderMetadata> {
         inner_type: ty.clone(),
         set_field_code: None,
         can_set_each: false,
-        error: None,
     };
 
     // check to see if there is a builder attributee
     if let Some(a) = attrs.iter().find(|a| a.path.segments[0].ident == "builder") {
 
-        match a.parse_meta() {
-            Ok(syn::Meta::List(syn::MetaList { path: _, nested, ..  } ))  => {
+        let parsed = a.parse_meta();
+         match parsed {
+            Ok(syn::Meta::List(nvs))  => {
+                let nested = nvs.nested.clone();
                 if nested.len() != 1 {
                     panic!("Only one builder option expected");
                 }
@@ -100,7 +100,7 @@ fn analyze_fields (f: &syn::Field) -> Option<FieldBuilderMetadata> {
                             let inner_ty = match is_vec(&ty) {
                                 Some(ty) => ty,
                                 None => {
-                                    field_info.error = mk_err(&f.ty);
+                                    field_info.set_field_code = mk_err(nested);
                                     return Some(field_info);
                                 }
                             };
@@ -144,37 +144,36 @@ fn analyze_fields (f: &syn::Field) -> Option<FieldBuilderMetadata> {
                                         #full_set_function
                                 });
                                 return Some(field_info);
-
                              }
                          }
                         // Eq for MetaNameValue eq_token is ALWAYS Eq so no need to check
                         else {
-                            eprintln!("Unknown builder attribute {})",path.segments[0].ident);
-                            field_info.error = mk_err(&f.ty);
+                            eprintln!("Unknown builder attribute {}",name);
+                            field_info.set_field_code = mk_err(nvs);
                             return Some(field_info);
                         }
                      }
                     Some(x) => {
                         eprintln!("Nested first Got unexpected {:?}",x);
-                        field_info.error = mk_err(&f.ty);
+                        field_info.set_field_code = mk_err(x);
                         return Some(field_info);
                      }
                     
                     None => {
                         eprintln!("None on nested.first");
-                        field_info.error = mk_err(&f.ty);
+                        field_info.set_field_code = mk_err(a);
                         return Some(field_info);
                      }
                  }
             },
             Ok(_other) => {
                 eprintln!("Got something unexpected");
-                field_info.error = mk_err(&f.ty);
+                field_info.set_field_code = mk_err(a);
                 return Some(field_info);
             },
             Err(_) => {
                 eprintln!("Error on parse_meta");
-                field_info.error = mk_err(&f.ty);
+                field_info.set_field_code = mk_err(a);
                 return Some(field_info);
             },
         };
