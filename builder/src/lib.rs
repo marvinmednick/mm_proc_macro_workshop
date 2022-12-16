@@ -1,8 +1,5 @@
-use proc_macro::TokenStream;
-use quote::{quote,format_ident};
-use syn::DeriveInput;
 
-fn unwrapped_option_type<'a>(ty : &'a syn::Type) -> Option<&'a syn::Type> {
+fn unwrapped_option_type<'a>(ty : &'a syn::Type) -> std::option::Option<&'a syn::Type> {
 
     // check that path is of a type 
     
@@ -106,14 +103,14 @@ fn analyze_fields (f: &syn::Field) -> Option<FieldBuilderMetadata> {
                             };
 
 
-                            let ls_id =  format_ident!("{}",ls.value());
-                            let add_set_function = quote! {
+                            let ls_id =  quote::format_ident!("{}",ls.value());
+                            let add_set_function = quote::quote! {
                                 fn #ls_id (&mut self, #ls_id: #inner_ty) -> &mut Self {
                                     self.#name.push(#ls_id);
                                     self
                                 }
                             };
-                            let full_set_function = quote!{  
+                            let full_set_function = quote::quote!{  
                                 fn #name (&mut self, #name: #ty) -> &mut Self {
                                     self.#name = #name;
                                     self
@@ -139,7 +136,7 @@ fn analyze_fields (f: &syn::Field) -> Option<FieldBuilderMetadata> {
                                 // Init function can still set to None
                                 // could or could not be optional to set  (
 
-                                field_info.set_field_code = std::option::Option::Some(quote! {
+                                field_info.set_field_code = std::option::Option::Some(quote::quote! {
                                         #add_set_function
                                         #full_set_function
                                 });
@@ -179,7 +176,7 @@ fn analyze_fields (f: &syn::Field) -> Option<FieldBuilderMetadata> {
         };
     }
 
-    let full_set_function = quote!{  
+    let full_set_function = quote::quote!{  
         fn #name (&mut self, #name: #ty) -> &mut Self {
             self.#name = std::option::Option::Some(#name);
             self
@@ -192,14 +189,14 @@ fn analyze_fields (f: &syn::Field) -> Option<FieldBuilderMetadata> {
 }
 
 #[proc_macro_derive(Builder, attributes(builder))]
-pub fn derive(input: TokenStream) -> TokenStream {
+pub fn derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input3 = input.clone();
 
-    let parsed_input : DeriveInput = syn::parse(input3).unwrap();
+    let parsed_input : syn::DeriveInput = syn::parse(input3).unwrap();
     let parsed_copy = parsed_input.clone();
 
     let struct_name = parsed_input.ident;
-    let builder_name = format_ident!("{}Builder",struct_name);
+    let builder_name = quote::format_ident!("{}Builder",struct_name);
 
 
     // get the list of fields from the structure
@@ -225,10 +222,10 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
     let builder_definition : std::vec::Vec<_> = builder_definition_data.iter().map(|(name,inner_type,can_set_each) |  {
         if *can_set_each {
-                quote! { #name : #inner_type }
+                quote::quote! { #name : #inner_type }
         } 
         else {
-            quote! { #name : std::option::Option<#inner_type> }
+            quote::quote! { #name : std::option::Option<#inner_type> }
         }
     }).collect();
 
@@ -239,10 +236,10 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
     let builder_init_fields = names.iter().map(|(name, can_set_each)|
         if *can_set_each {
-           quote!{  #name: vec![] } 
+           quote::quote!{  #name: vec![] } 
         }
         else {
-           quote!{  #name: std::option::Option::None } 
+           quote::quote!{  #name: std::option::Option::None } 
        });
 
     //////////////////////////////////////////////////////////
@@ -250,7 +247,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
     let set_field_funcs : std::vec::Vec<_> = field_metadata.iter().map(|f| f.set_field_code.clone()).collect();
 
     let builder_methods : std::vec::Vec<_> = set_field_funcs.iter().map(|set_func| 
-         quote!{  
+         quote::quote!{  
                 #set_func
            }
        ).collect();
@@ -262,12 +259,12 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
     let unset_fields = optional.iter().map(|(name, is_optional, can_set_each)| 
         if  *is_optional || *can_set_each {
-            quote! { 
+            quote::quote! { 
                 std::option::Option::None
             }
         } 
         else {
-           quote! {
+           quote::quote! {
                if self.#name == std::option::Option::None {
                    std::option::Option::Some(std::stringify!(#name).to_string())
                }
@@ -285,21 +282,21 @@ pub fn derive(input: TokenStream) -> TokenStream {
         if ! is_optional {
             if *can_set_each {
                 // Not setup as Optional -- empty fields will be an empty vec not as None
-               quote! { #name : self.#name.clone() }
+               quote::quote! { #name : self.#name.clone() }
             }
             else {
-               quote! { #name : self.#name.clone().unwrap() }
+               quote::quote! { #name : self.#name.clone().unwrap() }
             }
         }
         else {
-               quote! { #name : self.#name.clone() }
+               quote::quote! { #name : self.#name.clone() }
         }
     ).collect();
 
 
     //
     // OUTPUT
-    let output : proc_macro::TokenStream = quote!( 
+    let output : proc_macro::TokenStream = quote::quote!( 
          pub struct #builder_name {
             #(#builder_definition,)*
          }
@@ -316,7 +313,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
             #(#builder_methods)*  
 
-            fn build(&mut self) -> std::result::Result<#struct_name,  Box<dyn std::error::Error>> {
+            fn build(&mut self) -> std::result::Result<#struct_name,  std::boxed::Box<dyn std::error::Error>> {
 
                 let missing : std::vec::Vec<String> = vec![ #(#unset_fields),* ].into_iter().filter_map(|e| e).collect();
 
