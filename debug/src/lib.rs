@@ -13,23 +13,24 @@ fn analyze_fields (f: &syn::Field) -> proc_macro2::TokenStream {
     if let std::option::Option::Some(a) = attrs.iter().find(|a| a.path.segments[0].ident == "debug") {
 
         let parsed = a.parse_meta();
-        eprintln!("Parsed is {:#?}",parsed);
+//        eprintln!("Parsed is {:#?}",parsed);
 
          match parsed {
             std::result::Result::Ok(syn::Meta::NameValue(syn::MetaNameValue {path, eq_token: _ , lit : syn::Lit::Str(ls) } )) => {
                 if path.segments[0].ident == "debug" {
 
-                    let fmt_string =  format!("{}",ls.value());
-                    eprintln!("Debug Format for this field is {:?}",fmt_string);
+                    let fmt_string =  ls.value();
+//                    eprintln!("Debug Format for this field is {:?}",fmt_string.as_bytes());
+
                     return quote::quote! {
-                        .field(#fld_ident, format!("#fmt_string",self.#name))
+                        .field(#fld_ident, &format_args!(#fmt_string,&self.#name))
                     };
 
                  }
                 // Eq for MetaNameValue eq_token is ALWAYS Eq so no need to check
                 else {
                     return quote::quote! {
-                        .field(#fld_ident,self.#name)
+                        .field(#fld_ident,&self.#name)
                     };
                 }
             }
@@ -44,8 +45,9 @@ fn analyze_fields (f: &syn::Field) -> proc_macro2::TokenStream {
         };
     }
 
+ //   eprint!("Return 2");
     return quote::quote! {
-        .field(#fld_ident, format!("{}",self.#name))
+        .field(#fld_ident, &self.#name)
     };
 
 }
@@ -83,12 +85,12 @@ pub fn derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 
     let field_info = fields.iter().map(|f| { 
-        let name = f.ident.clone().unwrap();
-        let fld_ident = format!("{}",name);
-        quote::quote! {
-            .field(#fld_ident,&self.#name)
-        }
-//        analyze_fields(&f)
+//        let name = f.ident.clone().unwrap();
+//        let fld_ident = format!("{}",name);
+//        quote::quote! {
+//            .field(#fld_ident,&self.#name)
+ //       }
+        analyze_fields(&f)
     });
 
 
