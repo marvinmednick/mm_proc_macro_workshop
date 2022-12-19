@@ -1,3 +1,4 @@
+use syn::DeriveInput;
 
 fn unwrapped_option_type<'a>(ty : &'a syn::Type) -> std::option::Option<&'a syn::Type> {
 
@@ -192,7 +193,7 @@ fn analyze_fields (f: &syn::Field) -> Option<FieldBuilderMetadata> {
 pub fn derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input3 = input.clone();
 
-    let parsed_input : syn::DeriveInput = syn::parse(input3).unwrap();
+    let parsed_input : DeriveInput = syn::parse(input3).unwrap();
     let parsed_copy = parsed_input.clone();
 
     let struct_name = parsed_input.ident;
