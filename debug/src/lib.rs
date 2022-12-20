@@ -56,6 +56,13 @@ fn analyze_fields (f: &syn::Field) -> proc_macro2::TokenStream {
 pub fn derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let _ = input;
     let parsed = syn::parse_macro_input!(input as syn::DeriveInput);
+    eprintln!("Generics {:#?}",parsed.generics);
+    let generics = parsed.generics;
+     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+    eprintln!("Impl Generics {:#?}",impl_generics);
+    eprintln!("Ty Generics {:#?}",ty_generics);
+    eprintln!("where Generics {:#?}",where_clause);
+
     let struct_name = parsed.ident.clone();
     //    eprintln!("Processing {:#?}",parsed);
     //
@@ -97,7 +104,7 @@ pub fn derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let struct_name_string = format!("{}",struct_name);
 
     let output =  quote::quote!  {
-        impl std::fmt::Debug for Field {
+        impl #impl_generics std::fmt::Debug for #struct_name #ty_generics {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.debug_struct(#struct_name_string)
                  #(#field_info)*
