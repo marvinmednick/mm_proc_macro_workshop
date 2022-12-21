@@ -1,8 +1,66 @@
+use syn::{
+    parse_macro_input, parse_quote, 
+    Data, DeriveInput, 
+    Error, Field, Fields, 
+    FieldsNamed, DataStruct, GenericParam, Generics, 
+    Lit,Meta,MetaNameValue,
+};
 
-fn analyze_fields (f: &syn::Field) -> proc_macro2::TokenStream {
+#[proc_macro_derive(CustomDebug, attributes(debug))]
+pub fn derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let _ = input;
+    let parsed = parse_macro_input!(input as DeriveInput);
+    let generics = parsed.generics;
+    //eprintln!("Generics Before Adding Trait {:#?}\n ---------------------- End Before",generics);
+    let generics = add_trait_bounds(generics);
+    //eprintln!("Generics After adding Trait {:#?}\n-------- End After",generics);
+     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+    //eprintln!("Impl Generics {:#?}",impl_generics);
+    //eprintln!("Ty Generics {:#?}",ty_generics);
+    //eprintln!("where Generics {:#?}",where_clause);
+
+    let struct_name = parsed.ident.clone();
+    //    eprintln!("Processing {:#?}",parsed);
+    //
+    // get the list of fields from the structure
+    let fields = if let Data::Struct(
+        DataStruct {
+            fields: Fields::Named(FieldsNamed {
+                ref named, ..
+                }),
+            ..
+        }
+    ) = parsed.data { named }
+    else {
+        // this dervive (builder) only supports structures at this time
+        unimplemented!();
+    };
+
+
+    let field_info = fields.iter().map(|f| { 
+        analyze_fields(&f)
+    });
+
+
+    let struct_name_string = format!("{}",struct_name);
+
+    let output =  quote::quote!  {
+        impl #impl_generics std::fmt::Debug for #struct_name #ty_generics #where_clause {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.debug_struct(#struct_name_string)
+                 #(#field_info)*
+                 .finish()
+            }
+        }
+    };
+    return output.into();
+}
+
+
+fn analyze_fields (f: &Field) -> proc_macro2::TokenStream {
 
     fn mk_err<T: quote::ToTokens>(t: T) -> proc_macro2::TokenStream {
-            syn::Error::new_spanned(t, "expected `(debug = \"...\")`").to_compile_error()
+            Error::new_spanned(t, "expected `(debug = \"...\")`").to_compile_error()
     }
 
     let name = f.ident.clone().unwrap();
@@ -16,7 +74,7 @@ fn analyze_fields (f: &syn::Field) -> proc_macro2::TokenStream {
 //        eprintln!("Parsed is {:#?}",parsed);
 
          match parsed {
-            std::result::Result::Ok(syn::Meta::NameValue(syn::MetaNameValue {path, eq_token: _ , lit : syn::Lit::Str(ls) } )) => {
+            std::result::Result::Ok(Meta::NameValue(MetaNameValue {path, eq_token: _ , lit : Lit::Str(ls) } )) => {
                 if path.segments[0].ident == "debug" {
 
                     let fmt_string =  ls.value();
@@ -52,65 +110,14 @@ fn analyze_fields (f: &syn::Field) -> proc_macro2::TokenStream {
 
 }
 
-#[proc_macro_derive(CustomDebug, attributes(debug))]
-pub fn derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let _ = input;
-    let parsed = syn::parse_macro_input!(input as syn::DeriveInput);
-    eprintln!("Generics {:#?}",parsed.generics);
-    let generics = parsed.generics;
-     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-    eprintln!("Impl Generics {:#?}",impl_generics);
-    eprintln!("Ty Generics {:#?}",ty_generics);
-    eprintln!("where Generics {:#?}",where_clause);
 
-    let struct_name = parsed.ident.clone();
-    //    eprintln!("Processing {:#?}",parsed);
-    //
-    // get the list of fields from the structure
-    let fields = if let syn::Data::Struct(
-        syn::DataStruct {
-            fields: syn::Fields::Named(syn::FieldsNamed {
-                ref named, ..
-                }),
-            ..
+// Add a bound `T: HeapSize` to every type parameter T.
+fn add_trait_bounds(mut generics: Generics) -> Generics {
+    for param in &mut generics.params {
+        if let GenericParam::Type(ref mut type_param) = *param {
+            type_param.bounds.push(parse_quote!(std::fmt::Debug));
         }
-    ) = parsed.data { named }
-    else {
-        // this dervive (builder) only supports structures at this time
-        unimplemented!();
-    };
-
-
-    /*
-    eprintln!("Struct name {}",struct_name);
-    for f in fields.clone() {
-        let name = f.ident.clone().unwrap();
-        //eprintln!("Field Name: {} {:#?}",name, f);
-
     }
-    */
-
-
-    let field_info = fields.iter().map(|f| { 
-//        let name = f.ident.clone().unwrap();
-//        let fld_ident = format!("{}",name);
-//        quote::quote! {
-//            .field(#fld_ident,&self.#name)
- //       }
-        analyze_fields(&f)
-    });
-
-
-    let struct_name_string = format!("{}",struct_name);
-
-    let output =  quote::quote!  {
-        impl #impl_generics std::fmt::Debug for #struct_name #ty_generics {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                f.debug_struct(#struct_name_string)
-                 #(#field_info)*
-                 .finish()
-            }
-        }
-    };
-    return output.into();
+    generics
 }
+
