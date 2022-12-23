@@ -8,6 +8,7 @@ struct Seq {
     name : Ident,
     start: LitInt,
     end: LitInt,
+    tt: proc_macro2::TokenStream,
 }
 
 impl Parse for Seq {
@@ -23,10 +24,10 @@ impl Parse for Seq {
         // now need to collect all the content
         let content;
         let _braces = syn::braced!(content in input);
-        let _tt = proc_macro2::TokenStream::parse(&content)?;
-        eprintln!("Content is {:?}",content);
-        eprintln!("Parsed content is {:?}",_tt);
-        Ok(Seq { name, start, end, })
+        let tt = proc_macro2::TokenStream::parse(&content)?;
+//        eprintln!("Content is {:?}",content);
+//        eprintln!("Parsed content is {:?}",tt);
+        Ok(Seq { name, start, end, tt})
 
     }
 }
@@ -43,9 +44,12 @@ pub fn seq(input: TokenStream) -> TokenStream {
         name,
         start, 
         end,
+        tt,
     } = parse_macro_input!(input as Seq);
-    eprintln!("Name is {} Start is {} End is {}",name, start, end);
+    eprintln!("Name is {} Start is {} End is {} TT is {} ",name, start, end, tt);
+//    let content = quote!{ #tt };
+    let content = quote!{ eprintln!("This is a message"); };
 
 
-    quote! { }.into()
+    quote! { #content  }.into()
 }
