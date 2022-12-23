@@ -1,6 +1,6 @@
 #![feature(proc_macro_diagnostic)]
 use proc_macro::TokenStream;
-use syn::parse::{Parse, ParseStream, Result};
+use syn::parse::{Parse, ParseStream, ParseBuffer,Result};
 use quote::quote ;
 use syn::{parse_macro_input, Ident, LitInt, Token, };
 
@@ -24,7 +24,9 @@ impl Parse for Seq {
         let content;
         let _braces = syn::braced!(content in input);
         let _tt = proc_macro2::TokenStream::parse(&content)?;
-        Ok(Seq { name, start, end })
+        eprintln!("Content is {:?}",content);
+        eprintln!("Parsed content is {:?}",_tt);
+        Ok(Seq { name, start, end, })
 
     }
 }
