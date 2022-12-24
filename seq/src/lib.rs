@@ -1,7 +1,7 @@
 #![feature(proc_macro_diagnostic)]
 use proc_macro::TokenStream;
 use syn::parse::{Parse, ParseStream, ParseBuffer,Result};
-use quote::quote ;
+use quote::{quote, format_ident} ;
 use syn::{parse_macro_input, Ident, LitInt, Token, };
 
 struct Seq { 
@@ -48,8 +48,17 @@ pub fn seq(input: TokenStream) -> TokenStream {
     } = parse_macro_input!(input as Seq);
     eprintln!("Name is {} Start is {} End is {} TT is {} ",name, start, end, tt);
 //    let content = quote!{ #tt };
-    let content = quote!{ eprintln!("This is a message"); };
 
+    let mut new = quote! {};
 
-    quote! { #content  }.into()
+    let a = start.base10_parse::<u16>().unwrap();
+    let b = end.base10_parse::<u16>().unwrap();
+    for n in a..b {
+        let sname = format_ident!("xyz_{}",n);
+        let content = quote!{ struct #sname { i : u32 } };
+        new.extend(content);
+    }
+        
+
+    quote! { #new  }.into()
 }
