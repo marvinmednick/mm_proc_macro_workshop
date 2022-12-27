@@ -32,6 +32,27 @@ impl Parse for Seq {
     }
 }
 
+
+impl Seq {
+
+    fn expand(&self) -> proc_macro2::TokenStream {
+    //    let content = quote!{ #contents };
+
+        eprintln!("Name is {} Start is {} End is {} contnets is {:#?} ",self.name, self.start, self.end, self.contents);
+        let mut new = quote! {};
+
+        let a = self.start.base10_parse::<u16>().unwrap();
+        let b = self.end.base10_parse::<u16>().unwrap();
+        for n in a..b {
+            let sname = format_ident!("xyz_{}",n);
+            let content = quote!{ struct sname { i : u32 } };
+            new.extend(content);
+        }
+
+        quote! { #new  }
+    }
+}
+
 #[proc_macro]
 pub fn seq(input: TokenStream) -> TokenStream {
  //   let _ = input;
@@ -44,16 +65,6 @@ pub fn seq(input: TokenStream) -> TokenStream {
     eprintln!("Name is {} Start is {} End is {} TT is {:#?} ",parsed.name, parsed.start, parsed.end, parsed.contents);
 //    let content = quote!{ #contents };
 
-    let mut new = quote! {};
 
-    let a = parsed.start.base10_parse::<u16>().unwrap();
-    let b = parsed.end.base10_parse::<u16>().unwrap();
-    for n in a..b {
-        let sname = format_ident!("xyz_{}",n);
-        let content = quote!{ struct xyz { i : u32 } };
-        new.extend(content);
-    }
-        
-
-    quote! { #new  }.into()
+    parsed.expand().into()
 }
