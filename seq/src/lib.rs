@@ -46,7 +46,7 @@ pub fn seq(input: TokenStream) -> TokenStream {
         end,
         tt,
     } = parse_macro_input!(input as Seq);
-    eprintln!("Name is {} Start is {} End is {} TT is {} ",name, start, end, tt);
+    eprintln!("Name is {} Start is {} End is {} TT is {:#?} ",name, start, end, tt);
 //    let content = quote!{ #tt };
 
     let mut new = quote! {};
@@ -55,7 +55,7 @@ pub fn seq(input: TokenStream) -> TokenStream {
     let b = end.base10_parse::<u16>().unwrap();
     for n in a..b {
         let sname = format_ident!("xyz_{}",n);
-        let content = quote!{ struct #sname { i : u32 } };
+        let content = quote!{ struct xyz { i : u32 } };
         new.extend(content);
     }
         
