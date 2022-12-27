@@ -8,7 +8,7 @@ struct Seq {
     name : Ident,
     start: LitInt,
     end: LitInt,
-    tt: proc_macro2::TokenStream,
+    contents: proc_macro2::TokenStream,
 }
 
 impl Parse for Seq {
@@ -24,10 +24,10 @@ impl Parse for Seq {
         // now need to collect all the content
         let content;
         let _braces = syn::braced!(content in input);
-        let tt = proc_macro2::TokenStream::parse(&content)?;
+        let contents = proc_macro2::TokenStream::parse(&content)?;
 //        eprintln!("Content is {:?}",content);
-//        eprintln!("Parsed content is {:?}",tt);
-        Ok(Seq { name, start, end, tt})
+//        eprintln!("Parsed content is {:?}",contents);
+        Ok(Seq { name, start, end, contents})
 
     }
 }
@@ -40,19 +40,14 @@ pub fn seq(input: TokenStream) -> TokenStream {
 
     //let parsed = parse_macro_input!(input );
     
-    let Seq {
-        name,
-        start, 
-        end,
-        tt,
-    } = parse_macro_input!(input as Seq);
-    eprintln!("Name is {} Start is {} End is {} TT is {:#?} ",name, start, end, tt);
-//    let content = quote!{ #tt };
+    let parsed = parse_macro_input!(input as Seq);
+    eprintln!("Name is {} Start is {} End is {} TT is {:#?} ",parsed.name, parsed.start, parsed.end, parsed.contents);
+//    let content = quote!{ #contents };
 
     let mut new = quote! {};
 
-    let a = start.base10_parse::<u16>().unwrap();
-    let b = end.base10_parse::<u16>().unwrap();
+    let a = parsed.start.base10_parse::<u16>().unwrap();
+    let b = parsed.end.base10_parse::<u16>().unwrap();
     for n in a..b {
         let sname = format_ident!("xyz_{}",n);
         let content = quote!{ struct xyz { i : u32 } };
