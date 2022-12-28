@@ -1,14 +1,14 @@
 #![feature(proc_macro_diagnostic)]
 use proc_macro::TokenStream;
-use syn::parse::{Parse, ParseStream, ParseBuffer,Result};
-use quote::{quote, format_ident} ;
+use syn::parse::{Parse, ParseStream, Result};
+use quote::quote ;
 use syn::{parse_macro_input, Ident, LitInt, Token, };
 
 struct Seq { 
-    name : Ident,
+    _name : Ident,
     start: LitInt,
     end: LitInt,
-    contents: proc_macro2::TokenStream,
+    _contents: proc_macro2::TokenStream,
 }
 
 impl Parse for Seq {
@@ -27,7 +27,7 @@ impl Parse for Seq {
         let contents = proc_macro2::TokenStream::parse(&content)?;
 //        eprintln!("Content is {:?}",content);
 //        eprintln!("Parsed content is {:?}",contents);
-        Ok(Seq { name, start, end, contents})
+        Ok(Seq { _name : name, start, end, _contents: contents})
 
     }
 }
@@ -38,18 +38,25 @@ impl Seq {
     fn expand(&self) -> proc_macro2::TokenStream {
     //    let content = quote!{ #contents };
 
-        eprintln!("Name is {} Start is {} End is {} contnets is {:#?} ",self.name, self.start, self.end, self.contents);
-        let mut new = quote! {};
+//        eprintln!("Name is {} Start is {} End is {} contnets is {:#?} ",self.name, self.start, self.end, self.contents);
+//        let mut new = quote! {};
 
         let a = self.start.base10_parse::<u16>().unwrap();
         let b = self.end.base10_parse::<u16>().unwrap();
-        for n in a..b {
-            let sname = format_ident!("xyz_{}",n);
-            let content = quote!{ struct sname { i : u32 } };
-            new.extend(content);
-        }
+        let expanded:  Vec<_> = (a..b).map(|i| { 
+           // let varname = format_ident!("{}",i);
+//            eprintln!("I is {}",i);
+            quote!{ compile_error!(concat!("error number ", stringify!(#i))); }
+            //quote!{ struct sname { #varname : u32 } }
+        }).collect();
+//        for n in a..b {
+//            let sname = format_ident!("xyz_{}",n);
+//            let content = quote!{ struct sname { i : u32 } };
+//
+//            new.extend(content);
+//        }
 
-        quote! { #new  }
+        quote! { #(#expanded)*  }
     }
 }
 
@@ -62,7 +69,7 @@ pub fn seq(input: TokenStream) -> TokenStream {
     //let parsed = parse_macro_input!(input );
     
     let parsed = parse_macro_input!(input as Seq);
-    eprintln!("Name is {} Start is {} End is {} TT is {:#?} ",parsed.name, parsed.start, parsed.end, parsed.contents);
+//    eprintln!("Name is {} Start is {} End is {} TT is {:#?} ",parsed.name, parsed.start, parsed.end, parsed.contents);
 //    let content = quote!{ #contents };
 
 
