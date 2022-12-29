@@ -1,4 +1,6 @@
 #![feature(proc_macro_diagnostic)]
+use std::ops::Range;
+
 use quote::quote;
 use syn::parse::{Parse, ParseStream, Result};
 use syn::{parse_macro_input, Ident, LitInt, Token};
@@ -38,14 +40,84 @@ impl Seq {
         // get the start and end of the range
         let begin = self.start.base10_parse::<u16>().unwrap();
         let end = self.end.base10_parse::<u16>().unwrap();
+        let range = begin..end;
+        let expanded_sequence =
+            expand_sequences(self.contents.clone(), self.name.clone(), range.clone());
+
         //eprintln!("TS is {:#?}", self.contents);
         // parse each entry and replace the given identifier with the iteration number
-        let expanded: Vec<_> = (begin..end)
+        /*
+        let expanded: Vec<_> = range
             .map(|i| expand_ts(self.contents.clone(), self.name.clone(), i.into()))
             .collect();
-
         quote! { #(#expanded)*  }
+        */
+
+        quote! { #expanded_sequence  }
     }
+}
+
+/// Parse the Transport stream looking for
+fn expand_sequences(
+    ts: proc_macro2::TokenStream,
+    name: Ident,
+    range: Range<u16>,
+) -> proc_macro2::TokenStream {
+    let mut output = quote! {};
+    let mut ts_iter = ts.into_iter();
+    while let Some(tt) = ts_iter.next() {
+        eprintln!("expand seq processing {:?}", tt);
+        output.extend(expand_repeat_group(
+            tt,
+            &mut ts_iter,
+            name.clone(),
+            range.clone(),
+        ));
+    }
+    output
+}
+
+fn expand_repeat_group(
+    tt: proc_macro2::TokenTree,
+    ts_iter: &mut proc_macro2::token_stream::IntoIter,
+    name: Ident,
+    range: Range<u16>,
+) -> proc_macro2::TokenStream {
+    let mut peek_iter = ts_iter.clone();
+    let next1 = peek_iter.next();
+    let next2 = peek_iter.next();
+    eprintln!(
+        "Repeat group checking on -----\n {:?}, {:?}, {:?}\n---End repeat group",
+        tt, next1, next2
+    );
+    let output = match (tt.clone(), next1, next2) {
+        (
+            proc_macro2::TokenTree::Punct(punct),
+            Some(proc_macro2::TokenTree::Group(g)),
+            Some(proc_macro2::TokenTree::Punct(punct1)),
+        ) if punct.as_char() == '#'
+            && g.delimiter() == proc_macro2::Delimiter::Parenthesis
+            && punct1.as_char() == '*' =>
+        {
+            eprintln!("Found Group {:?}", g.stream());
+            let expanded: Vec<_> = range
+                .map(|i| expand_ts(g.stream(), name.clone(), i.into()))
+                .collect();
+
+            *ts_iter = peek_iter;
+            quote! { #(#expanded)*  }
+        }
+        // other wise if we find a group we need to recursively parse it, continuing to look
+        // for a seuqnce to repeat
+        (proc_macro2::TokenTree::Group(ref g), _, _) => {
+            let updated_stream = expand_sequences(g.stream(), name, range);
+            let mut new_group = proc_macro2::Group::new(g.delimiter(), updated_stream);
+            new_group.set_span(g.span());
+            std::iter::once(proc_macro2::TokenTree::Group(new_group)).collect()
+        }
+        _ => std::iter::once(tt).collect(),
+    };
+    output
 }
 
 /// Expands a TokenStream2 by iterating through each of the TokenTrees and
