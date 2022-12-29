@@ -11,10 +11,6 @@ struct Seq {
     contents: proc_macro2::TokenStream,
 }
 
-fn expand_ts(ts: proc_macro2::TokenStream, name: Ident, index: u64) -> proc_macro2::TokenStream {
-    quote! { compile_error!(concat!("error number ", stringify!(#index))); }
-}
-
 impl Parse for Seq {
     fn parse(input: ParseStream) -> Result<Self> {
         //Expec  Ident, Token![in], LitInt, Token![..], LitInt.
@@ -53,11 +49,16 @@ impl Seq {
         name: Ident,
         index: u64,
     ) -> proc_macro2::TokenStream {
+//        eprintln!("Incoming ts {:#?}\n------",ts);
+        let mut output = quote!{};
         for tt in ts.into_iter() {
-            self.expand_tt(tt, name.clone(), index.clone());
+//            eprintln!("Processing tt {:#?}\n------",tt);
+            output.extend(self.expand_tt(tt, name.clone(), index.clone()));
         }
+        // eprintln!("Output is {:?}",output);
 
-        quote! { compile_error!(concat!("error number ", stringify!(#index))); }
+//        quote! { compile_error!(concat!("error number ", stringify!(#index))); }
+        output
     }
 
     fn expand_tt(
@@ -67,13 +68,30 @@ impl Seq {
         replace_value: u64,
     ) -> proc_macro2::TokenStream {
         let updated_tt = match tt {
-            proc_macro2::TokenTree::Group(ref g) => tt,
+            proc_macro2::TokenTree::Group(ref g) => {
+    //            eprintln!("Group option delim {:?} span {:?}",g.delimiter(),g.span());
+                let updated_stream = self.expand_ts(g.stream(),name,replace_value);
+                let mut new_group = proc_macro2::Group::new(g.delimiter(),updated_stream);
+                new_group.set_span(g.span());
+                proc_macro2::TokenTree::Group(new_group)
+            } ,
             proc_macro2::TokenTree::Ident(ref id) => {
-                let mut replace_lit = proc_macro2::Literal::u64_unsuffixed(replace_value);
-                replace_lit.set_span(id.span());
-                proc_macro2::TokenTree::Literal(replace_lit)
-            }
-            tt => tt,
+     //           eprintln!("Ident option tt is {:?}",tt);
+                if *id == name {
+      //              eprintln!("Found IT!!!!");
+                    let mut replace_lit = proc_macro2::Literal::u64_unsuffixed(replace_value);
+                    replace_lit.set_span(id.span());
+                    proc_macro2::TokenTree::Literal(replace_lit)
+                }
+                else {
+                    tt
+                }
+                
+            },
+            tt => {
+       //         eprintln!("Other option tt is {:?}",tt);
+                tt
+            },
         };
         std::iter::once(updated_tt).collect()
     }
