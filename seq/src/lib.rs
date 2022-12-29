@@ -1,5 +1,4 @@
 #![feature(proc_macro_diagnostic)]
-//use proc_macro::TokenStream;
 use quote::quote;
 use syn::parse::{Parse, ParseStream, Result};
 use syn::{parse_macro_input, Ident, LitInt, Token};
@@ -39,6 +38,7 @@ impl Seq {
         // get the start and end of the range
         let begin = self.start.base10_parse::<u16>().unwrap();
         let end = self.end.base10_parse::<u16>().unwrap();
+        //eprintln!("TS is {:#?}", self.contents);
         // parse each entry and replace the given identifier with the iteration number
         let expanded: Vec<_> = (begin..end)
             .map(|i| expand_ts(self.contents.clone(), self.name.clone(), i.into()))
@@ -56,8 +56,14 @@ fn expand_ts(
     replace_value: u16,
 ) -> proc_macro2::TokenStream {
     let mut output = quote! {};
-    for tt in ts.into_iter() {
-        output.extend(expand_tt(tt, name.clone(), replace_value.clone()));
+    let mut ts_iter = ts.into_iter();
+    while let Some(tt) = ts_iter.next() {
+        output.extend(expand_tt(
+            tt,
+            &mut ts_iter,
+            name.clone(),
+            replace_value.clone(),
+        ));
     }
 
     output
@@ -69,6 +75,7 @@ fn expand_ts(
 /// one were looking for, everything is used as is.
 fn expand_tt(
     tt: proc_macro2::TokenTree,
+    ts_iter: &mut proc_macro2::token_stream::IntoIter,
     name: Ident,
     replace_value: u16,
 ) -> proc_macro2::TokenStream {
@@ -83,25 +90,65 @@ fn expand_tt(
             proc_macro2::TokenTree::Group(new_group)
         }
         // Idents need to check to see if they match the ident provided in the original Macro
-        // call
+        // call if the ident matches
+        proc_macro2::TokenTree::Ident(id) if id == name => {
+            // need to replace the ident with a number
+            // The test is specifically looking for a unsuffixed value (i.e. just 5 instead of
+            // 5u64, 5u16. etc
+            // create a new value as a proc_macro2::Literal
+            let mut replace_lit = proc_macro2::Literal::u16_unsuffixed(replace_value);
+            // keep the same span
+            replace_lit.set_span(id.span());
+            //and convert it to a proc_macro2::TokenTree item
+            proc_macro2::TokenTree::Literal(replace_lit)
+        }
+        // Need to look ahead for the pattern Ident ~ N  e.g. f~N to convet to f0, f1 etc
+        // (and optionally ident~N~ and ident~N~ident  which would convert f~N~ to f0 and f~N~b  to
+        // f0b  (f~N~ could also be considered an error)
         proc_macro2::TokenTree::Ident(ref id) => {
-            // If the ident matches
-            if *id == name {
-                // need to replace the ident with a number
-                // The test is specifically looking for a unsuffixed value (i.e. just 5 instead of
-                // 5u64, 5u16. etc
-                // create a new value as a proc_macro2::Literal
-                let mut replace_lit = proc_macro2::Literal::u16_unsuffixed(replace_value);
-                // keep the same span
-                replace_lit.set_span(id.span());
-                //and convert it to a proc_macro2::TokenTree item
-                proc_macro2::TokenTree::Literal(replace_lit)
-            } else {
-                // nothing to on these (Punct or Literal)
-                tt
+            let mut peek_iter = ts_iter.clone(); // get a copy of the stream to peeks and consume
+                                                 // until we figure out what we want to do
+
+            match (peek_iter.next(), peek_iter.next()) {
+                (
+                    Some(proc_macro2::TokenTree::Punct(punct)),
+                    Some(proc_macro2::TokenTree::Ident(id2)),
+                ) if punct.as_char() == '~' && id2 == name => {
+                    // At this point we know we have id~N at least, though
+                    // there could still be ida~N~idb
+                    let mut peek_cpy = peek_iter.clone();
+                    match (peek_cpy.next(), peek_cpy.next()) {
+                        (
+                            Some(proc_macro2::TokenTree::Punct(punct)),
+                            Some(proc_macro2::TokenTree::Ident(id3)),
+                        ) if punct.as_char() == '~' => {
+                            // at this pint we have idA~N~idB e.g f~_bar -> f1_bar
+                            let new_ident_name = format!("{}{}{}", id, replace_value, id3);
+                            //eprintln!("New identifier is {}", new_ident_name);
+                            *ts_iter = peek_cpy;
+                            proc_macro2::TokenTree::Ident(proc_macro2::Ident::new(
+                                &new_ident_name,
+                                id.span(),
+                            ))
+                        }
+
+                        (_, _) => {
+                            // otherwise we just ahve id~N
+                            let new_ident_name = format!("{}{}", id, replace_value);
+                            //eprintln!("New identifier is {}", new_ident_name);
+                            *ts_iter = peek_iter;
+                            proc_macro2::TokenTree::Ident(proc_macro2::Ident::new(
+                                &new_ident_name,
+                                id.span(),
+                            ))
+                        }
+                    }
+                }
+
+                (_, _) => tt,
             }
         }
-        tt => tt,
+        _ => tt,
     };
     std::iter::once(updated_tt).collect()
 }
