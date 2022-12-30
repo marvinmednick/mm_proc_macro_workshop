@@ -7,8 +7,9 @@ use syn::{parse_macro_input, Ident, LitInt, Token};
 
 struct Seq {
     name: Ident,
-    start: LitInt,
-    end: LitInt,
+    begin: u16,
+    end: u16,
+    inclusive: bool,
     contents: proc_macro2::TokenStream,
 }
 
@@ -17,17 +18,28 @@ impl Parse for Seq {
         //Expec  Ident, Token![in], LitInt, Token![..], LitInt.
         let name: Ident = input.parse()?;
         input.parse::<Token![in]>()?;
-        let start: LitInt = input.parse()?;
+        let start_token: LitInt = input.parse()?;
+        let begin = start_token.base10_parse::<u16>().unwrap();
         input.parse::<Token![..]>()?;
-        let end: LitInt = input.parse()?;
+        // use lookahead to determine if this is an inclusive range or not
+        let lookahead = input.lookahead1();
+        let mut inclusive = false;
+        if lookahead.peek(Token![=]) {
+            // flag as inclusive
+            inclusive = true;
+            input.parse::<Token![=]>()?;
+        }
+        let end_token: LitInt = input.parse()?;
+        let end = end_token.base10_parse::<u16>().unwrap();
         // now need to collect all the content
         let content;
         let _braces = syn::braced!(content in input);
         let contents = proc_macro2::TokenStream::parse(&content)?;
         Ok(Seq {
             name,
-            start,
+            begin,
             end,
+            inclusive,
             contents,
         })
     }
@@ -38,9 +50,15 @@ impl Seq {
     /// with the iteration number
     fn expand(&self) -> proc_macro2::TokenStream {
         // get the start and end of the range
-        let begin = self.start.base10_parse::<u16>().unwrap();
-        let end = self.end.base10_parse::<u16>().unwrap();
-        let range = begin..end;
+
+        // setup the range based on the inclusive flag
+        // can't use a incluse range for the first case (..=) as it has a different
+        // type so trying passing it as parameter causes a problem
+        // Instead, we'll just adjust the range to add 1
+        let range = match self.inclusive {
+            true => self.begin..self.end + 1,
+            false => self.begin..self.end,
+        };
 
         // try to expand sequences within the token stream -- i.e. the
         // content has someting like
