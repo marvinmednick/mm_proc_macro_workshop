@@ -41,19 +41,29 @@ impl Seq {
         let begin = self.start.base10_parse::<u16>().unwrap();
         let end = self.end.base10_parse::<u16>().unwrap();
         let range = begin..end;
-        let expanded_sequence =
+
+        // try to expand sequences within the token stream -- i.e. the
+        // content has someting like
+        //    Some Non-repeagted Code
+        //    #(
+        //      code to repeat
+        //     )
+        //     additional non repeated code
+        let (did_expand_sequence, expanded_sequence) =
             expand_sequences(self.contents.clone(), self.name.clone(), range.clone());
 
-        //eprintln!("TS is {:#?}", self.contents);
-        // parse each entry and replace the given identifier with the iteration number
-        /*
-        let expanded: Vec<_> = range
-            .map(|i| expand_ts(self.contents.clone(), self.name.clone(), i.into()))
-            .collect();
-        quote! { #(#expanded)*  }
-        */
-
-        quote! { #expanded_sequence  }
+        // didn't find internal sequence to repeat,
+        // so process the entire block as repeated code and replace the variables
+        if did_expand_sequence {
+            quote! { #expanded_sequence  }
+        } else {
+            //eprintln!("TS is {:#?}", self.contents);
+            // parse each entry and replace the given identifier with the iteration number
+            let expanded: Vec<_> = range
+                .map(|i| expand_ts(self.contents.clone(), self.name.clone(), i.into()))
+                .collect();
+            quote! { #(#expanded)*  }
+        }
     }
 }
 
@@ -62,19 +72,18 @@ fn expand_sequences(
     ts: proc_macro2::TokenStream,
     name: Ident,
     range: Range<u16>,
-) -> proc_macro2::TokenStream {
+) -> (bool, proc_macro2::TokenStream) {
     let mut output = quote! {};
     let mut ts_iter = ts.into_iter();
+    let mut replaced_sequence = false;
     while let Some(tt) = ts_iter.next() {
-        eprintln!("expand seq processing {:?}", tt);
-        output.extend(expand_repeat_group(
-            tt,
-            &mut ts_iter,
-            name.clone(),
-            range.clone(),
-        ));
+        //        eprintln!("expand seq processing {:?}", tt);
+        let (tt_replaced_group, expanded_ts) =
+            expand_repeat_group(tt, &mut ts_iter, name.clone(), range.clone());
+        output.extend(expanded_ts);
+        replaced_sequence |= tt_replaced_group;
     }
-    output
+    (replaced_sequence, output)
 }
 
 fn expand_repeat_group(
@@ -82,14 +91,12 @@ fn expand_repeat_group(
     ts_iter: &mut proc_macro2::token_stream::IntoIter,
     name: Ident,
     range: Range<u16>,
-) -> proc_macro2::TokenStream {
+) -> (bool, proc_macro2::TokenStream) {
     let mut peek_iter = ts_iter.clone();
     let next1 = peek_iter.next();
     let next2 = peek_iter.next();
-    eprintln!(
-        "Repeat group checking on -----\n {:?}, {:?}, {:?}\n---End repeat group",
-        tt, next1, next2
-    );
+    let mut replaced_group = false;
+    //   eprintln!( "Repeat group checking on -----\n {:?}, {:?}, {:?}\n---End repeat group", tt, next1, next2);
     let output = match (tt.clone(), next1, next2) {
         (
             proc_macro2::TokenTree::Punct(punct),
@@ -99,25 +106,27 @@ fn expand_repeat_group(
             && g.delimiter() == proc_macro2::Delimiter::Parenthesis
             && punct1.as_char() == '*' =>
         {
-            eprintln!("Found Group {:?}", g.stream());
+            //            eprintln!("Found Group {:?}", g.stream());
             let expanded: Vec<_> = range
                 .map(|i| expand_ts(g.stream(), name.clone(), i.into()))
                 .collect();
 
             *ts_iter = peek_iter;
+            replaced_group = true;
             quote! { #(#expanded)*  }
         }
         // other wise if we find a group we need to recursively parse it, continuing to look
         // for a seuqnce to repeat
         (proc_macro2::TokenTree::Group(ref g), _, _) => {
-            let updated_stream = expand_sequences(g.stream(), name, range);
+            let (made_replacement, updated_stream) = expand_sequences(g.stream(), name, range);
             let mut new_group = proc_macro2::Group::new(g.delimiter(), updated_stream);
             new_group.set_span(g.span());
+            replaced_group |= made_replacement;
             std::iter::once(proc_macro2::TokenTree::Group(new_group)).collect()
         }
         _ => std::iter::once(tt).collect(),
     };
-    output
+    (replaced_group, output)
 }
 
 /// Expands a TokenStream2 by iterating through each of the TokenTrees and
